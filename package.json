@@ -1,11 +1,11 @@
 {
-  "name": "rp-cli",
+  "name": "@rezaparsian/rp-cli",
   "version": "0.0.1",
   "description": "CLI tool that uses AI to generate Git commit messages",
   "type": "module",
   "main": "index.js",
   "bin": {
-    "rp-cli": "./main.js"
+    "rp-cli": "main.js"
   },
   "scripts": {
     "dev": "node --watch main.js"
@@ -24,12 +24,15 @@
   "packageManager": "pnpm@10.33.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/RezaParsian/RpCli.git"
+    "url": "git+https://github.com/RezaParsian/RpCli.git"
   },
   "bugs": {
     "url": "https://github.com/RezaParsian/RpCli/issues"
   },
   "homepage": "https://github.com/RezaParsian/RpCli#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "dependencies": {
     "commander": "^14.0.3",
     "up-fetch": "^2.6.0"
