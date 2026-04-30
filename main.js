@@ -13,7 +13,7 @@ program
   .option('--models', 'show available models to use')
   .addHelpText('after', '\nExample:\n  rp-cli\n  rp-cli --model 1\n  rp-cli --models')
 
- program.parse();
+program.parse();
 
 const options = program.opts();
 
@@ -34,7 +34,7 @@ Object.keys(options).forEach(async (key) => {
   }
 })
 
-if (!Object.keys(options).some(k => k !== 'help' && k !== 'version')) {
+if (!Object.keys(options).some(k => k !== 'help' && k !== 'version' && k !== 'model')) {
   try {
     await handel()
   } catch (error) {

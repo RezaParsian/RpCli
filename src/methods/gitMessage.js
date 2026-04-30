@@ -1,5 +1,6 @@
 import {execSync} from 'child_process';
 import request from "../core/Ai.js";
+import askYesNo from "../core/askYesNo.js";
 
 export default async function handel() {
   const diff = getGitDiff();
@@ -34,7 +35,19 @@ export default async function handel() {
       return res + choice.message.content;
     }, '');
 
-    console.log(content);
+    console.log('\x1b[35m' + content + '\x1b[0m');
+
+    const [rl, shouldCommit] = await askYesNo('Do you want to commit this? (y/n)')
+
+    if (shouldCommit) {
+      console.log('\x1b[33mCommitting...\x1b[0m');
+
+      execSync('git commit -F -', {input: content});
+
+      console.log('\x1b[32mDone!\x1b[0m');
+    }
+
+    rl.close();
   } catch (error) {
     console.error('Error generating commit message:', error.message);
     process.exit(1);
