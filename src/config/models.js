@@ -29,10 +29,11 @@ const models = [
   },
   {
     "id": "e9cd4b4c-c3e7-4e2f-ab89-6468963f3dfb",
-    "name": "DeepSeek V3.2 (default)",
+    "name": "DeepSeek V3.2",
     "category": "text",
     "provider": "OpenRouter",
-    "model_code": "deepseek/deepseek-v3.2"
+    "model_code": "deepseek/deepseek-v3.2",
+    is_default: true
   },
   {
     "id": "f38d97fd-29cc-41c6-bafc-939c66b3024f",
