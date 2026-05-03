@@ -20,6 +20,7 @@ Now, respond to the user's request with excellence.`;
 export async function getAIResponse(
 	modelId: string,
 	messages: ChatCompletionMessageParam[],
+	onChunk?: (chunk: string) => void,
 ): Promise<string> {
-	return request(modelId, messages);
+	return request(modelId, messages, onChunk);
 }

@@ -1,20 +1,45 @@
 {
 	"name": "@rezaparsian/rp-cli",
-	"version": "0.1.0",
+	"version": "0.2.0",
+	"description": "AI-powered CLI — interactive chat, single prompts, and git commit message generation",
 	"license": "MIT",
-	"bin": "dist/cli.js",
+	"author": {
+		"name": "RezaParsian",
+		"url": "https://github.com/RezaParsian"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/RezaParsian/RpCli.git"
+	},
+	"bugs": {
+		"url": "https://github.com/RezaParsian/RpCli/issues"
+	},
+	"homepage": "https://github.com/RezaParsian/RpCli#readme",
+	"keywords": [
+		"cli",
+		"ai",
+		"commit",
+		"git",
+		"ink",
+		"openai",
+		"terminal"
+	],
+	"bin": {
+		"rp-cli": "dist/cli.js"
+	},
 	"type": "module",
 	"engines": {
-		"node": ">=16"
-	},
-	"scripts": {
-		"build": "tsc",
-		"dev": "tsc --watch",
-		"test": "prettier --check . && xo && ava"
+		"node": ">=18.0.0"
 	},
 	"files": [
 		"dist"
 	],
+	"scripts": {
+		"build": "tsc",
+		"dev": "tsc --watch",
+		"prepublishOnly": "pnpm run build",
+		"test": "prettier --check . && xo && ava"
+	},
 	"dependencies": {
 		"ink": "^7.0.1",
 		"ink-big-text": "^2.0.0",

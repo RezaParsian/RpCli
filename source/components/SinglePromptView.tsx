@@ -27,8 +27,9 @@ export default function SinglePromptView({modelId, prompt}: Props) {
 
 		void (async () => {
 			try {
-				const content = await getAIResponse(modelId, messages);
-				setResponse(content);
+				await getAIResponse(modelId, messages, chunk => {
+					setResponse(prev => prev + chunk);
+				});
 				setState('done');
 			} catch (err) {
 				setError(err instanceof Error ? err.message : String(err));
@@ -39,14 +40,9 @@ export default function SinglePromptView({modelId, prompt}: Props) {
 
 	useEffect(() => {
 		if (state !== 'done' && state !== 'error') return;
-
 		const timer = setTimeout(() => exit(), 100);
 		return () => clearTimeout(timer);
 	}, [state, exit]);
-
-	if (state === 'loading') {
-		return <Spinner text="Thinking..." />;
-	}
 
 	if (state === 'error') {
 		return (
@@ -54,6 +50,10 @@ export default function SinglePromptView({modelId, prompt}: Props) {
 				✖ Error: {error}
 			</Text>
 		);
+	}
+
+	if (!response) {
+		return <Spinner text="Thinking..." />;
 	}
 
 	return <MarkdownText text={response} />;

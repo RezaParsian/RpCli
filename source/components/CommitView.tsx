@@ -1,11 +1,7 @@
 import React, {useEffect, useState} from 'react';
 import {Box, Text, useApp, useInput} from 'ink';
 import Spinner from './Spinner.js';
-import {
-	executeCommit,
-	generateCommitMessage,
-	getGitDiff,
-} from '../actions/commitMessage.js';
+import {executeCommit, generateCommitMessage, getGitDiff,} from '../actions/commitMessage.js';
 
 type State =
 	| 'init'
@@ -96,7 +92,7 @@ export default function CommitView({modelId, useAll}: Props) {
 	);
 
 	if (state === 'init' || state === 'generating') {
-		return <Spinner text="Generating commit message..." />;
+		return <Spinner text="Generating commit message..."/>;
 	}
 
 	if (state === 'review') {
@@ -117,7 +113,7 @@ export default function CommitView({modelId, useAll}: Props) {
 	}
 
 	if (state === 'committing') {
-		return <Spinner text="Committing changes..." />;
+		return <Spinner text="Committing changes..."/>;
 	}
 
 	if (state === 'success') {

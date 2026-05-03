@@ -22,6 +22,7 @@ export default function InteractiveChatView({model, version}: Props) {
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [input, setInput] = useState('');
 	const [loading, setLoading] = useState(false);
+	const [streamingContent, setStreamingContent] = useState('');
 
 	const handleSubmit = useCallback(
 		(value: string) => {
@@ -31,6 +32,7 @@ export default function InteractiveChatView({model, version}: Props) {
 			setMessages(prev => [...prev, userMessage]);
 			setInput('');
 			setLoading(true);
+			setStreamingContent('');
 
 			const apiMessages: ChatCompletionMessageParam[] = [
 				{role: 'system', content: CHAT_SYSTEM_PROMPT},
@@ -44,12 +46,20 @@ export default function InteractiveChatView({model, version}: Props) {
 
 			void (async () => {
 				try {
-					const response = await getAIResponse(model.id, apiMessages);
+					const fullResponse = await getAIResponse(
+						model.id,
+						apiMessages,
+						chunk => {
+							setStreamingContent(prev => prev + chunk);
+						},
+					);
+					setStreamingContent('');
 					setMessages(prev => [
 						...prev,
-						{role: 'assistant', content: response},
+						{role: 'assistant', content: fullResponse},
 					]);
 				} catch (err) {
+					setStreamingContent('');
 					setMessages(prev => [
 						...prev,
 						{
@@ -67,30 +77,37 @@ export default function InteractiveChatView({model, version}: Props) {
 
 	return (
 		<Box flexDirection="column">
-			<RpCliLogo version={version} model={model} />
+			<RpCliLogo version={version} model={model}/>
 
 			<Box flexDirection="column" marginX={1}>
 				{messages.map((msg, i) => (
 					<Box key={i} flexDirection="column" marginBottom={1}>
 						{msg.role === 'user' ? (
 							<Box>
-								<Text color="cyan" bold>
-									{'> '}
+								<Text color="magenta" bold>
+									{'> '}{msg.content}
 								</Text>
-								<Text>{msg.content}</Text>
 							</Box>
 						) : (
-							<Box paddingLeft={2}>
-								<MarkdownText text={msg.content} />
+							<Box>
+								<Text color="magenta" bold>✦ </Text>
+								<MarkdownText text={msg.content}/>
 							</Box>
 						)}
 					</Box>
 				))}
 
 				{loading ? (
-					<Spinner text="Thinking..." />
+					streamingContent ? (
+						<Box>
+							<Text color="magenta" bold>{'✦ '}</Text>
+							<MarkdownText text={streamingContent}/>
+						</Box>
+					) : (
+						<Spinner text="Thinking..." />
+					)
 				) : (
-					<Box>
+					<Box borderStyle="single" borderLeft={false} borderRight={false} borderColor="cyan">
 						<Text color="magenta" bold>
 							{'> '}
 						</Text>

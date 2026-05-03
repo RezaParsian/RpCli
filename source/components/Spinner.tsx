@@ -9,8 +9,8 @@ type Props = {
 export default function Spinner({text}: Props) {
 	return (
 		<Box>
-			<InkSpinner type="dots" />
-			<Text> {text}</Text>
+			<InkSpinner type="dots"/>
+			<Text color="magenta"> {text}</Text>
 		</Box>
 	);
 }
