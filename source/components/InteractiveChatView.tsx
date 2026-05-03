@@ -1,0 +1,108 @@
+import React, {useCallback, useState} from 'react';
+import {Box, Text} from 'ink';
+import TextInput from 'ink-text-input';
+import type {ChatCompletionMessageParam} from 'openai/resources/chat/completions';
+import type {Model} from '../config/models.js';
+import RpCliLogo from './RpCliLogo.js';
+import Spinner from './Spinner.js';
+import MarkdownText from './MarkdownText.js';
+import {CHAT_SYSTEM_PROMPT, getAIResponse} from '../actions/chat.js';
+
+type Message = {
+	role: 'user' | 'assistant';
+	content: string;
+};
+
+type Props = {
+	model: Model;
+	version?: string;
+};
+
+export default function InteractiveChatView({model, version}: Props) {
+	const [messages, setMessages] = useState<Message[]>([]);
+	const [input, setInput] = useState('');
+	const [loading, setLoading] = useState(false);
+
+	const handleSubmit = useCallback(
+		(value: string) => {
+			if (!value.trim() || loading) return;
+
+			const userMessage: Message = {role: 'user', content: value.trim()};
+			setMessages(prev => [...prev, userMessage]);
+			setInput('');
+			setLoading(true);
+
+			const apiMessages: ChatCompletionMessageParam[] = [
+				{role: 'system', content: CHAT_SYSTEM_PROMPT},
+				{role: 'assistant', content: 'Got it. Thanks for the context!'},
+				...messages.map(
+					m =>
+						({role: m.role, content: m.content}) as ChatCompletionMessageParam,
+				),
+				{role: 'user', content: userMessage.content},
+			];
+
+			void (async () => {
+				try {
+					const response = await getAIResponse(model.id, apiMessages);
+					setMessages(prev => [
+						...prev,
+						{role: 'assistant', content: response},
+					]);
+				} catch (err) {
+					setMessages(prev => [
+						...prev,
+						{
+							role: 'assistant',
+							content: `Error: ${err instanceof Error ? err.message : String(err)}`,
+						},
+					]);
+				} finally {
+					setLoading(false);
+				}
+			})();
+		},
+		[messages, model.id, loading],
+	);
+
+	return (
+		<Box flexDirection="column">
+			<RpCliLogo version={version} model={model} />
+
+			<Box flexDirection="column" marginX={1}>
+				{messages.map((msg, i) => (
+					<Box key={i} flexDirection="column" marginBottom={1}>
+						{msg.role === 'user' ? (
+							<Box>
+								<Text color="cyan" bold>
+									{'> '}
+								</Text>
+								<Text>{msg.content}</Text>
+							</Box>
+						) : (
+							<Box paddingLeft={2}>
+								<MarkdownText text={msg.content} />
+							</Box>
+						)}
+					</Box>
+				))}
+
+				{loading ? (
+					<Spinner text="Thinking..." />
+				) : (
+					<Box>
+						<Text color="magenta" bold>
+							{'> '}
+						</Text>
+						<TextInput
+							value={input}
+							onChange={setInput}
+							onSubmit={handleSubmit}
+							placeholder="Type your message..."
+						/>
+					</Box>
+				)}
+			</Box>
+		</Box>
+	);
+}
