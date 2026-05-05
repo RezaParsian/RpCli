@@ -1,6 +1,7 @@
 import React from 'react';
 import {Box, Text} from 'ink';
 import {marked} from 'marked';
+import SyntaxHighlight from 'ink-syntax-highlight';
 
 type AnyToken = {
 	type: string;
@@ -10,6 +11,7 @@ type AnyToken = {
 	tokens?: AnyToken[];
 	href?: string;
 	items?: AnyToken[];
+	lang?: string;
 };
 
 function renderInline(tokens: AnyToken[]): React.ReactNode {
@@ -87,9 +89,10 @@ function renderBlock(token: AnyToken, key: number): React.ReactNode {
 	if (token.type === 'code') {
 		return (
 			<Box key={key} flexDirection="column" marginY={1}>
-				<Text color="gray">{'─'.repeat(60)}</Text>
-				<Text>{token.text}</Text>
-				<Text color="gray">{'─'.repeat(60)}</Text>
+				<SyntaxHighlight
+					code={token.text || ''}
+					language={token.lang}
+				/>
 			</Box>
 		);
 	}
@@ -120,14 +123,15 @@ function renderBlock(token: AnyToken, key: number): React.ReactNode {
 	}
 
 	if (token.type === 'space') {
-		return <Box key={key} marginBottom={1} />;
+		return <Box key={key} marginBottom={1}/>;
 	}
 
 	return <Text key={key}>{token.raw ?? ''}</Text>;
 }
 
-export default function MarkdownText({text}: {text: string}) {
+export default function MarkdownText({text}: { text: string }) {
 	const tokens = marked.lexer(text) as unknown as AnyToken[];
+
 	return (
 		<Box flexDirection="column">
 			{tokens.map((token, i) => renderBlock(token, i))}
