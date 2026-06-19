@@ -1,12 +1,12 @@
 import React, {useCallback, useState} from 'react';
 import {Box, Text} from 'ink';
 import TextInput from 'ink-text-input';
-import type {ChatCompletionMessageParam} from 'openai/resources/chat/completions';
 import type {Model} from '../config/models.js';
 import RpCliLogo from './RpCliLogo.js';
 import Spinner from './Spinner.js';
 import MarkdownText from './MarkdownText.js';
 import {CHAT_SYSTEM_PROMPT, getAIResponse} from '../actions/chat.js';
+import {ChatMessage} from "@heyputer/puter.js";
 
 type Message = {
 	role: 'user' | 'assistant';
@@ -34,12 +34,12 @@ export default function InteractiveChatView({model, version}: Props) {
 			setLoading(true);
 			setStreamingContent('');
 
-			const apiMessages: ChatCompletionMessageParam[] = [
+			const apiMessages: ChatMessage[] = [
 				{role: 'system', content: CHAT_SYSTEM_PROMPT},
 				{role: 'assistant', content: 'Got it. Thanks for the context!'},
 				...messages.map(
 					m =>
-						({role: m.role, content: m.content}) as ChatCompletionMessageParam,
+						({role: m.role, content: m.content}) as ChatMessage,
 				),
 				{role: 'user', content: userMessage.content},
 			];
@@ -47,11 +47,7 @@ export default function InteractiveChatView({model, version}: Props) {
 			void (async () => {
 				try {
 					const fullResponse = await getAIResponse(
-						model.id,
-						apiMessages,
-						chunk => {
-							setStreamingContent(prev => prev + chunk);
-						},
+						apiMessages
 					);
 					setStreamingContent('');
 					setMessages(prev => [
@@ -104,7 +100,7 @@ export default function InteractiveChatView({model, version}: Props) {
 							<MarkdownText text={streamingContent}/>
 						</Box>
 					) : (
-						<Spinner text="Thinking..." />
+						<Spinner text="Thinking..."/>
 					)
 				) : (
 					<Box borderStyle="single" borderLeft={false} borderRight={false} borderColor="cyan">

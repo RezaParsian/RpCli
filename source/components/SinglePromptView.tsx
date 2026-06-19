@@ -1,9 +1,9 @@
 import React, {useEffect, useState} from 'react';
 import {Text, useApp} from 'ink';
-import type {ChatCompletionMessageParam} from 'openai/resources/chat/completions';
 import Spinner from './Spinner.js';
 import MarkdownText from './MarkdownText.js';
 import {CHAT_SYSTEM_PROMPT, getAIResponse} from '../actions/chat.js';
+import {ChatMessage} from "@heyputer/puter.js";
 
 type State = 'loading' | 'done' | 'error';
 
@@ -19,7 +19,7 @@ export default function SinglePromptView({modelId, prompt}: Props) {
 	const [error, setError] = useState('');
 
 	useEffect(() => {
-		const messages: ChatCompletionMessageParam[] = [
+		const messages: ChatMessage[] = [
 			{role: 'system', content: CHAT_SYSTEM_PROMPT},
 			{role: 'assistant', content: 'Got it. Thanks for the context!'},
 			{role: 'user', content: prompt},
@@ -27,11 +27,10 @@ export default function SinglePromptView({modelId, prompt}: Props) {
 
 		void (async () => {
 			try {
-				await getAIResponse(modelId, messages, chunk => {
-					setResponse(prev => prev + chunk);
-				});
+				setResponse(await getAIResponse(messages));
 				setState('done');
 			} catch (err) {
+				console.log({err})
 				setError(err instanceof Error ? err.message : String(err));
 				setState('error');
 			}
@@ -53,8 +52,8 @@ export default function SinglePromptView({modelId, prompt}: Props) {
 	}
 
 	if (!response) {
-		return <Spinner text="Thinking..." />;
+		return <Spinner text="Thinking..."/>;
 	}
 
-	return <MarkdownText text={response} />;
+	return <MarkdownText text={response}/>;
 }

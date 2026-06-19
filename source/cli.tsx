@@ -2,8 +2,12 @@
 import React from 'react';
 import {render} from 'ink';
 import meow from 'meow';
-import models from './config/models.js';
-import App from './app.js';
+import dotenv from 'dotenv';
+
+dotenv.config({quiet: true})
+
+const { default: models } = await import('./config/models.js');
+const { default: App } = await import('./app.js');
 
 const cli = meow(
 	`

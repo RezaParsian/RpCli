@@ -1,8 +1,8 @@
 import {execSync} from 'child_process';
 import request from '../core/Ai.js';
-import type {ChatCompletionMessageParam} from 'openai/resources/chat/completions';
+import {ChatMessage} from "@heyputer/puter.js";
 
-const CHAT_SYSTEM_PROMPT=`You are a senior engineer specialized in writing perfect Conventional Commit messages.
+const CHAT_SYSTEM_PROMPT = `You are a senior engineer specialized in writing perfect Conventional Commit messages.
 
 Instructions:
 - Analyze the git diff carefully.
@@ -24,10 +24,9 @@ export function getGitDiff(useAll: boolean): string {
 }
 
 export async function generateCommitMessage(
-	modelId: string,
 	diff: string,
 ): Promise<string> {
-	const messages: ChatCompletionMessageParam[] = [
+	const messages: ChatMessage[] = [
 		{
 			role: 'system',
 			content: CHAT_SYSTEM_PROMPT,
@@ -38,7 +37,7 @@ export async function generateCommitMessage(
 		},
 	];
 
-	const content = await request(modelId, messages);
+	const content = await request(messages);
 	return content.trim();
 }
 

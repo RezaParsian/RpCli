@@ -1,5 +1,5 @@
 import request from '../core/Ai.js';
-import type {ChatCompletionMessageParam} from 'openai/resources/chat/completions';
+import {ChatMessage} from "@heyputer/puter.js";
 
 export const CHAT_SYSTEM_PROMPT = `You are RP-CLI, an advanced and powerful AI assistant built to help developers with high-quality responses.
 
@@ -18,9 +18,7 @@ You are currently running as "rp-cli" — a command line tool that helps users w
 Now, respond to the user's request with excellence.`;
 
 export async function getAIResponse(
-	modelId: string,
-	messages: ChatCompletionMessageParam[],
-	onChunk?: (chunk: string) => void,
+	messages: ChatMessage[],
 ): Promise<string> {
-	return request(modelId, messages, onChunk);
+	return request(messages);
 }

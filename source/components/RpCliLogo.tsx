@@ -17,7 +17,7 @@ export default function RpCliLogo({version, model}: Props) {
 	return (
 		<Box alignItems="center" marginY={1}>
 			<Gradient name="teen">
-				<BigText text="RpCli" />
+				<BigText text="RpCli"/>
 			</Gradient>
 
 			<Gradient name="teen">

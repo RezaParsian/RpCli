@@ -41,6 +41,8 @@
 		"test": "prettier --check . && xo && ava"
 	},
 	"dependencies": {
+		"@heyputer/puter.js": "^2.5.3",
+		"dotenv": "^17.4.2",
 		"ink": "^7.0.1",
 		"ink-big-text": "^2.0.0",
 		"ink-gradient": "^4.0.0",
@@ -54,6 +56,7 @@
 	},
 	"devDependencies": {
 		"@sindresorhus/tsconfig": "^3.0.1",
+		"@types/node": "^25.9.3",
 		"@types/react": "^18.0.32",
 		"@vdemedes/prettier-config": "^2.0.1",
 		"ava": "^5.2.0",

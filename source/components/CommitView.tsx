@@ -43,7 +43,7 @@ export default function CommitView({modelId, useAll}: Props) {
 
 		void (async () => {
 			try {
-				const message = await generateCommitMessage(modelId, diff);
+				const message = await generateCommitMessage( diff);
 				setCommitMessage(message);
 				setState('review');
 			} catch (err) {
