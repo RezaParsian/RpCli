@@ -14,11 +14,10 @@ type State =
 	| 'error';
 
 type Props = {
-	modelId: string;
 	useAll: boolean;
 };
 
-export default function CommitView({modelId, useAll}: Props) {
+export default function CommitView({useAll}: Props) {
 	const {exit} = useApp();
 	const [state, setState] = useState<State>('init');
 	const [commitMessage, setCommitMessage] = useState('');
@@ -43,7 +42,7 @@ export default function CommitView({modelId, useAll}: Props) {
 
 		void (async () => {
 			try {
-				const message = await generateCommitMessage( diff);
+				const message = await generateCommitMessage(diff);
 				setCommitMessage(message);
 				setState('review');
 			} catch (err) {
@@ -51,7 +50,7 @@ export default function CommitView({modelId, useAll}: Props) {
 				setState('error');
 			}
 		})();
-	}, [modelId, useAll]);
+	}, [useAll]);
 
 	useEffect(() => {
 		if (state !== 'committing') return;

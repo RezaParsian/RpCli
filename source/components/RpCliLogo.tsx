@@ -3,14 +3,12 @@ import React from 'react';
 import {Box, Text, useWindowSize} from 'ink';
 import Gradient from 'ink-gradient';
 import BigText from 'ink-big-text';
-import type {Model} from '../config/models.js';
 
 type Props = {
 	version?: string;
-	model?: Model;
 };
 
-export default function RpCliLogo({version, model}: Props) {
+export default function RpCliLogo({version}: Props) {
 	const {columns} = useWindowSize();
 	const cwd = process.cwd().replace(os.homedir(), '~');
 
@@ -33,12 +31,12 @@ export default function RpCliLogo({version, model}: Props) {
 					<Text>
 						{'>'}_ rp-cli (<Text color="gray">{version ?? '0.0.0'}</Text>)
 					</Text>
-					{model && (
-						<Text>
-							<Text color="gray">model: </Text>
-							<Text>{model.name}</Text>
-						</Text>
-					)}
+
+					<Text>
+						<Text color="gray">model: </Text>
+						<Text>DeepSeek</Text>
+					</Text>
+
 					<Text>
 						<Text color="gray">dir: </Text>
 						<Text wrap="truncate-end">{cwd}</Text>

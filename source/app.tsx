@@ -1,7 +1,5 @@
 import React, {useEffect} from 'react';
 import {Box, Text, useApp} from 'ink';
-import type {Model} from './config/models.js';
-import ModelsList from './components/ModelsList.js';
 import CommitView from './components/CommitView.js';
 import SinglePromptView from './components/SinglePromptView.js';
 import InteractiveChatView from './components/InteractiveChatView.js';
@@ -10,14 +8,13 @@ type Mode = 'interactive' | 'prompt' | 'commit' | 'models';
 
 type Props = {
 	mode: Mode;
-	selectedModel: Model;
-	allModels: Model[];
+	selectedModel: string
 	commitAll: boolean;
 	prompt: string;
 	version?: string;
 };
 
-function Header({model}: {model: Model}) {
+function Header({model}: { model: string }) {
 	return (
 		<Box flexDirection="column" marginBottom={1}>
 			<Text bold color="cyan">
@@ -25,22 +22,19 @@ function Header({model}: {model: Model}) {
 			</Text>
 			<Text color="gray">
 				{'Model: '}
-				<Text color="white">{model.name}</Text>
-				{'  '}
-				<Text color="gray">({model.provider})</Text>
+				<Text color="white">{model}</Text>
 			</Text>
 		</Box>
 	);
 }
 
 export default function App({
-	mode,
-	selectedModel,
-	allModels,
-	commitAll,
-	prompt,
-	version,
-}: Props) {
+								mode,
+								selectedModel,
+								commitAll,
+								prompt,
+								version,
+							}: Props) {
 	const {exit} = useApp();
 
 	useEffect(() => {
@@ -50,15 +44,12 @@ export default function App({
 		return () => clearTimeout(timer);
 	}, [mode, exit]);
 
-	if (mode === 'models') {
-		return <ModelsList models={allModels} />;
-	}
 
 	if (mode === 'commit') {
 		return (
 			<Box flexDirection="column" marginX={1} marginY={1}>
-				<Header model={selectedModel} />
-				<CommitView modelId={selectedModel.id} useAll={commitAll} />
+				<Header model={selectedModel}/>
+				<CommitView useAll={commitAll}/>
 			</Box>
 		);
 	}
@@ -66,11 +57,11 @@ export default function App({
 	if (mode === 'prompt') {
 		return (
 			<Box flexDirection="column" marginX={1} marginY={1}>
-				<Header model={selectedModel} />
-				<SinglePromptView modelId={selectedModel.id} prompt={prompt} />
+				<Header model={selectedModel}/>
+				<SinglePromptView  prompt={prompt}/>
 			</Box>
 		);
 	}
 
-	return <InteractiveChatView model={selectedModel} version={version} />;
+	return <InteractiveChatView version={version}/>;
 }

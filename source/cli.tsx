@@ -3,10 +3,10 @@ import React from 'react';
 import {render} from 'ink';
 import meow from 'meow';
 import dotenv from 'dotenv';
+import sendMessage from "./core/SendMessage.js";
 
 dotenv.config({quiet: true})
 
-const { default: models } = await import('./config/models.js');
 const { default: App } = await import('./app.js');
 
 const cli = meow(
@@ -19,10 +19,8 @@ const cli = meow(
 	  $ rp-cli --models                  Show available models
 
 	Options
-	  --models, -m          Show available models
 	  --commit-message, -c  Generate commit message from staged changes
 	  --commit-all, -a      Use git diff HEAD instead of --staged (use with -c)
-	  --model               Choose model number (1 to ${models.length})
 	  --version             Show version
 
 	Examples
@@ -30,8 +28,6 @@ const cli = meow(
 	  $ rp-cli "explain bubble sort in 2 sentences"
 	  $ rp-cli -c
 	  $ rp-cli -c -a
-	  $ rp-cli --models
-	  $ rp-cli --model 3 -c
 `,
 	{
 		importMeta: import.meta,
@@ -44,9 +40,12 @@ const cli = meow(
 	},
 );
 
-const modelIndex = cli.flags.model ? cli.flags.model - 1 : 4;
-const selectedModel = models[modelIndex] ?? models[4]!;
+const selectedModel = 'DeepSeek';
 const prompt = cli.input.join(' ').trim();
+
+const token = process.env["DEEPSEEK_TOKEN"];
+
+sendMessage(token!,'im reza')
 
 const mode = cli.flags.models
 	? 'models'
@@ -60,7 +59,6 @@ render(
 	<App
 		mode={mode}
 		selectedModel={selectedModel}
-		allModels={models}
 		commitAll={cli.flags.commitAll ?? false}
 		prompt={prompt}
 		version={cli.pkg.version}

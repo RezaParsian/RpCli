@@ -1,12 +1,10 @@
 import React, {useCallback, useState} from 'react';
 import {Box, Text} from 'ink';
 import TextInput from 'ink-text-input';
-import type {Model} from '../config/models.js';
 import RpCliLogo from './RpCliLogo.js';
 import Spinner from './Spinner.js';
 import MarkdownText from './MarkdownText.js';
 import {CHAT_SYSTEM_PROMPT, getAIResponse} from '../actions/chat.js';
-import {ChatMessage} from "@heyputer/puter.js";
 
 type Message = {
 	role: 'user' | 'assistant';
@@ -14,66 +12,60 @@ type Message = {
 };
 
 type Props = {
-	model: Model;
 	version?: string;
 };
 
-export default function InteractiveChatView({model, version}: Props) {
+const token = process.env["DEEPSEEK_TOKEN"];
+
+export default function InteractiveChatView({ version}: Props) {
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [input, setInput] = useState('');
 	const [loading, setLoading] = useState(false);
-	const [streamingContent, setStreamingContent] = useState('');
+
+	if (!token) throw new Error('No token provided');
 
 	const handleSubmit = useCallback(
 		(value: string) => {
 			if (!value.trim() || loading) return;
 
-			const userMessage: Message = {role: 'user', content: value.trim()};
+			const userMessage: Message = {
+				role: 'user',
+				content: value.trim(),
+			};
+
 			setMessages(prev => [...prev, userMessage]);
 			setInput('');
 			setLoading(true);
-			setStreamingContent('');
-
-			const apiMessages: ChatMessage[] = [
-				{role: 'system', content: CHAT_SYSTEM_PROMPT},
-				{role: 'assistant', content: 'Got it. Thanks for the context!'},
-				...messages.map(
-					m =>
-						({role: m.role, content: m.content}) as ChatMessage,
-				),
-				{role: 'user', content: userMessage.content},
-			];
 
 			void (async () => {
 				try {
-					const fullResponse = await getAIResponse(
-						apiMessages
-					);
-					setStreamingContent('');
-					setMessages(prev => [
-						...prev,
-						{role: 'assistant', content: fullResponse},
-					]);
+					await getAIResponse(token, CHAT_SYSTEM_PROMPT)
+
+					const fullResponse = await getAIResponse(token, userMessage.content);
+
+					setMessages(prev => [...prev, {
+						role: 'assistant',
+						content: fullResponse.content ?? 'Ai Error!'
+					}]);
 				} catch (err) {
-					setStreamingContent('');
 					setMessages(prev => [
 						...prev,
 						{
 							role: 'assistant',
 							content: `Error: ${err instanceof Error ? err.message : String(err)}`,
-						},
+						}
 					]);
 				} finally {
 					setLoading(false);
 				}
 			})();
 		},
-		[messages, model.id, loading],
+		[messages, loading],
 	);
 
 	return (
 		<Box flexDirection="column">
-			<RpCliLogo version={version} model={model}/>
+			<RpCliLogo version={version}/>
 
 			<Box flexDirection="column" marginX={1}>
 				{messages.map((msg, i) => (
@@ -93,28 +85,20 @@ export default function InteractiveChatView({model, version}: Props) {
 					</Box>
 				))}
 
-				{loading ? (
-					streamingContent ? (
-						<Box>
-							<Text color="magenta" bold>{'✦ '}</Text>
-							<MarkdownText text={streamingContent}/>
+				{loading ? <Spinner text="Thinking..."/>
+					: (
+						<Box borderStyle="single" borderLeft={false} borderRight={false} borderColor="cyan">
+							<Text color="magenta" bold>
+								{'> '}
+							</Text>
+							<TextInput
+								value={input}
+								onChange={setInput}
+								onSubmit={handleSubmit}
+								placeholder="Type your message..."
+							/>
 						</Box>
-					) : (
-						<Spinner text="Thinking..."/>
-					)
-				) : (
-					<Box borderStyle="single" borderLeft={false} borderRight={false} borderColor="cyan">
-						<Text color="magenta" bold>
-							{'> '}
-						</Text>
-						<TextInput
-							value={input}
-							onChange={setInput}
-							onSubmit={handleSubmit}
-							placeholder="Type your message..."
-						/>
-					</Box>
-				)}
+					)}
 			</Box>
 		</Box>
 	);

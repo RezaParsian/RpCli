@@ -1,5 +1,5 @@
-import request from '../core/Ai.js';
-import {ChatMessage} from "@heyputer/puter.js";
+import sendMessage from "../core/SendMessage.js";
+import {ChatResult} from "../core/Chat.js";
 
 export const CHAT_SYSTEM_PROMPT = `You are RP-CLI, an advanced and powerful AI assistant built to help developers with high-quality responses.
 
@@ -18,7 +18,8 @@ You are currently running as "rp-cli" — a command line tool that helps users w
 Now, respond to the user's request with excellence.`;
 
 export async function getAIResponse(
-	messages: ChatMessage[],
-): Promise<string> {
-	return request(messages);
+	token:string,
+	messages: string,
+): Promise<ChatResult> {
+	return sendMessage(token,messages);
 }
