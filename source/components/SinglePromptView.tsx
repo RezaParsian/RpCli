@@ -19,6 +19,7 @@ export default function SinglePromptView({prompt}: Props) {
 	const [state, setState] = useState<State>('loading');
 	const [response, setResponse] = useState('');
 	const [error, setError] = useState('');
+	const [toolActivity, setToolActivity] = useState<string>();
 	const {pending, confirmTool} = useToolConfirmation();
 
 	if (!token) throw new Error('No token provided');
@@ -28,7 +29,12 @@ export default function SinglePromptView({prompt}: Props) {
 			try {
 				await getAIResponse(token, CHAT_SYSTEM_PROMPT);
 
-				const fullResponse = await getAIResponse(token, prompt, confirmTool);
+				const fullResponse = await getAIResponse(
+					token,
+					prompt,
+					confirmTool,
+					setToolActivity,
+				);
 
 				deleteSession(token, fullResponse.sessionId);
 
@@ -57,6 +63,7 @@ export default function SinglePromptView({prompt}: Props) {
 	}
 
 	if (pending) return <ToolConfirmation call={pending.call} />;
+	if (toolActivity) return <Spinner text={toolActivity} />;
 
 	if (!response) {
 		return <Spinner text="Thinking..." />;

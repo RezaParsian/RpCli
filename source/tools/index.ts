@@ -277,3 +277,43 @@ export async function executeTool(call: ToolCall): Promise<string> {
 export function toolRequiresConfirmation(name: string): boolean {
 	return tools.find(tool => tool.name === name)?.requiresConfirmation ?? false;
 }
+
+export function describeToolActivity(call: ToolCall): string {
+	const pathValue =
+		typeof call.arguments['path'] === 'string' ? call.arguments['path'] : '.';
+
+	switch (call.name) {
+		case 'list_directory': {
+			return `Listing directory ${pathValue}...`;
+		}
+		case 'read_file': {
+			return `Reading ${pathValue}...`;
+		}
+		case 'write_file': {
+			return `Writing to ${pathValue}...`;
+		}
+		case 'edit_file': {
+			return `Editing ${pathValue}...`;
+		}
+		case 'delete_file': {
+			return `Deleting ${pathValue}...`;
+		}
+		case 'search_files': {
+			const query =
+				typeof call.arguments['query'] === 'string'
+					? call.arguments['query']
+					: '';
+			return `Searching for "${query}" in ${pathValue}...`;
+		}
+		case 'run_command': {
+			const command =
+				typeof call.arguments['command'] === 'string'
+					? call.arguments['command']
+					: '';
+			return `Running command: ${command}`;
+		}
+		default: {
+			return `Running ${call.name}...`;
+		}
+	}
+}

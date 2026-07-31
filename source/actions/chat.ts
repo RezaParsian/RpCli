@@ -2,6 +2,7 @@ import sendMessage from '../core/SendMessage.js';
 import {ChatResult} from '../core/Chat.js';
 import {
 	executeTool,
+	describeToolActivity,
 	parseToolCall,
 	TOOL_SYSTEM_PROMPT,
 	toolRequiresConfirmation,
@@ -32,6 +33,7 @@ export async function getAIResponse(
 	token: string,
 	messages: string,
 	confirmTool?: (call: ToolCall) => Promise<boolean>,
+	onToolActivity?: (activity?: string) => void,
 ): Promise<ChatResult> {
 	let response = await sendMessage(token, messages);
 
@@ -51,14 +53,23 @@ export async function getAIResponse(
 
 		if (!toolCall) return response;
 
+		const runTool = async () => {
+			onToolActivity?.(describeToolActivity(toolCall));
+			try {
+				return await executeTool(toolCall);
+			} finally {
+				onToolActivity?.();
+			}
+		};
+
 		let result: string;
 		if (toolRequiresConfirmation(toolCall.name)) {
 			const approved = confirmTool ? await confirmTool(toolCall) : false;
 			result = approved
-				? await executeTool(toolCall)
+				? await runTool()
 				: JSON.stringify({ok: false, error: 'User denied this tool call.'});
 		} else {
-			result = await executeTool(toolCall);
+			result = await runTool();
 		}
 		response = await sendMessage(
 			token,

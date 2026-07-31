@@ -41,6 +41,9 @@ tool calls returned by the model:
 - `search_files(query, path?)` searches files and returns up to 50 matching lines.
 - `run_command(command)` runs a shell command after user confirmation.
 
+While a tool is running, RP-CLI displays its current activity, including the target
+path, search query, or command where applicable.
+
 All paths are restricted to the directory where RP-CLI was started. To add another
 tool, register its description and executor in `source/tools/index.ts`; the system
 prompt is generated from the same registry. Tool calls use this protocol:
