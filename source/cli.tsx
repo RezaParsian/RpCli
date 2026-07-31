@@ -3,11 +3,17 @@ import React from 'react';
 import {render} from 'ink';
 import meow from 'meow';
 import dotenv from 'dotenv';
-import sendMessage from "./core/SendMessage.js";
+import path from 'path';
+import {fileURLToPath} from 'url';
 
-dotenv.config({quiet: true})
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const { default: App } = await import('./app.js');
+dotenv.config({
+	path: path.join(__dirname,'..', '.env'),
+	quiet: true,
+});
+
+const {default: App} = await import('./app.js');
 
 const cli = meow(
 	`
@@ -42,10 +48,6 @@ const cli = meow(
 
 const selectedModel = 'DeepSeek';
 const prompt = cli.input.join(' ').trim();
-
-const token = process.env["DEEPSEEK_TOKEN"];
-
-sendMessage(token!,'im reza')
 
 const mode = cli.flags.models
 	? 'models'

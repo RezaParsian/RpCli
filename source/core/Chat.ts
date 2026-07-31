@@ -28,16 +28,16 @@ export interface ChatResult {
 	raw?: any;
 }
 
-async function chat({
-						token,
-						model_type = 'default',
-						thinking_enabled = false,
-						search_enabled = false,
-						challenge,
-						sessionId,
-						parentMessageId,
-						prompt,
-					}: ChatProps): Promise<ChatResult> {
+export default async function chat({
+									   token,
+									   model_type = 'default',
+									   thinking_enabled = false,
+									   search_enabled = false,
+									   challenge,
+									   sessionId,
+									   parentMessageId,
+									   prompt,
+								   }: ChatProps): Promise<ChatResult> {
 
 	if (thinking_enabled && model_type === 'vision') throw new Error('This feature is not available for vision models');
 	if (search_enabled && model_type !== 'default') throw new Error('Search is only supported in default model mode');
@@ -104,13 +104,23 @@ async function chat({
 		finished: false,
 	};
 
+	const fragmentOrder: (number | string)[] = [];
+	const fragmentText: Record<string, string> = {};
+	let lastFragmentId: number | string | null = null;
+	let flatContent = "";
+	let usingFragments = false;
+
+	let buffer = "";
+
 	while (true) {
 		const {done, value} = await reader.read();
 
 		if (done) break;
 
-		const chunk = decoder.decode(value);
-		const lines = chunk.split("\n");
+		buffer += decoder.decode(value, {stream: true});
+
+		const lines = buffer.split("\n");
+		buffer = lines.pop() ?? "";
 
 		for (const line of lines) {
 			if (!line.startsWith("data: ")) continue;
@@ -132,14 +142,36 @@ async function chat({
 				result.thinkingEnabled = r.thinking_enabled;
 				result.insertedAt = r.inserted_at;
 				result.tokenUsage = r.accumulated_token_usage;
+
+				if (Array.isArray(r.fragments) && r.fragments.length) {
+					usingFragments = true;
+					for (const f of r.fragments) {
+						const id = f?.id;
+						if (id === undefined || id === null) continue;
+						if (!(id in fragmentText)) {
+							fragmentOrder.push(id);
+							fragmentText[id] = "";
+						}
+						fragmentText[id] += f?.content ?? "";
+						lastFragmentId = id;
+					}
+				} else if (typeof r.content === "string" && r.content.length) {
+					flatContent += r.content;
+				}
 				continue;
 			}
 
-			if (
-				typeof parsed.v === "string" &&
-				(!parsed.p || parsed.p.includes("fragments") || parsed.p.includes('response/content'))
-			) {
-				result.content! += parsed.v;
+			if (usingFragments && typeof parsed.v === "string" && typeof parsed.p === "string" && parsed.p.includes("fragments")) {
+				if (lastFragmentId !== null) {
+					fragmentText[lastFragmentId] += parsed.v;
+				} else {
+					flatContent += parsed.v;
+				}
+				continue;
+			}
+
+			if (!usingFragments && typeof parsed.v === "string" && (!parsed.p || parsed.p.includes("response/content"))) {
+				flatContent += parsed.v;
 				continue;
 			}
 
@@ -150,6 +182,11 @@ async function chat({
 					if (item.p === "quasi_status" && item.v === "FINISHED")
 						result.finished = true;
 				}
+				continue;
+			}
+
+			if (parsed.p === "response/accumulated_token_usage" && parsed.o === "SET") {
+				result.tokenUsage = parsed.v;
 				continue;
 			}
 
@@ -165,7 +202,21 @@ async function chat({
 		}
 	}
 
+	buffer += decoder.decode();
+	if (buffer.startsWith("data: ")) {
+		try {
+			const parsed = JSON.parse(buffer.slice(6));
+			if (parsed.p === "response/status" && parsed.v === "FINISHED") {
+				result.status = "FINISHED";
+				result.finished = true;
+			}
+		} catch {
+		}
+	}
+
+	result.content = usingFragments
+		? fragmentOrder.map(id => fragmentText[id]).join("")
+		: flatContent;
+
 	return result;
 }
-
-export default chat;

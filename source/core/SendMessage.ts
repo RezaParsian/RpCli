@@ -6,9 +6,9 @@ import createSessions from "./CreateSessions.js";
 import PowSolver from '@rezaparsian/deepseek-pow-solver'
 
 let sessionId = process.env["DEEPSEEK_SESSION_ID"];
-let parentMessageId: number | null = null;
+let parentMessageId: number | null = process.env['DEEPSEEK_MESSAGE_ID'] ? Number(process.env['DEEPSEEK_MESSAGE_ID']) : null;
 
-export default async function sendMessage(token:string,prompt: string): Promise<ChatResult> {
+export default async function sendMessage(token: string, prompt: string): Promise<ChatResult> {
 	if (parentMessageId === null) {
 		const sessions = await chatSessions(token);
 		const sessionDetail = sessions.find((session) => session.id === sessionId);
