@@ -1,4 +1,4 @@
-import React, {useCallback, useState} from 'react';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {Box, Text} from 'ink';
 import TextInput from 'ink-text-input';
 import RpCliLogo from './RpCliLogo.js';
@@ -6,6 +6,7 @@ import Spinner from './Spinner.js';
 import MarkdownText from './MarkdownText.js';
 import {CHAT_SYSTEM_PROMPT, getAIResponse} from '../actions/chat.js';
 import {ToolConfirmation, useToolConfirmation} from './ToolConfirmation.js';
+import deleteSession from '../core/DeleteSession.js';
 
 type Message = {
 	role: 'user' | 'assistant';
@@ -21,7 +22,12 @@ const token = process.env['DEEPSEEK_TOKEN'];
 export default function InteractiveChatView({version}: Props) {
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [input, setInput] = useState('');
-	const [loading, setLoading] = useState(false);
+	const [loading, setLoading] = useState(true);
+	const [initialized, setInitialized] = useState(false);
+	const sessionId = useRef<string>();
+	const hasUserMessage = useRef(false);
+	const unmounted = useRef(false);
+	const sessionDeleted = useRef(false);
 	const {pending, confirmTool} = useToolConfirmation();
 	const handleToolMessage = useCallback((content: string) => {
 		setMessages(previous => [...previous, {role: 'assistant', content}]);
@@ -29,9 +35,57 @@ export default function InteractiveChatView({version}: Props) {
 
 	if (!token) throw new Error('No token provided');
 
+	const deleteUnusedSession = useCallback(() => {
+		if (
+			hasUserMessage.current ||
+			sessionDeleted.current ||
+			!sessionId.current
+		) {
+			return;
+		}
+
+		sessionDeleted.current = true;
+		void deleteSession(token, sessionId.current).catch(() => undefined);
+	}, []);
+
+	useEffect(() => {
+		void (async () => {
+			try {
+				const response = await getAIResponse(token, CHAT_SYSTEM_PROMPT);
+				sessionId.current = response.sessionId;
+				if (unmounted.current) {
+					deleteUnusedSession();
+					return;
+				}
+
+				setInitialized(true);
+			} catch (error) {
+				if (!unmounted.current) {
+					setMessages(previous => [
+						...previous,
+						{
+							role: 'assistant',
+							content: `Error: ${
+								error instanceof Error ? error.message : String(error)
+							}`,
+						},
+					]);
+				}
+			} finally {
+				if (!unmounted.current) setLoading(false);
+			}
+		})();
+
+		return () => {
+			unmounted.current = true;
+			deleteUnusedSession();
+		};
+	}, [deleteUnusedSession]);
+
 	const handleSubmit = useCallback(
 		(value: string) => {
-			if (!value.trim() || loading) return;
+			if (!value.trim() || loading || !initialized) return;
+			hasUserMessage.current = true;
 
 			const userMessage: Message = {
 				role: 'user',
@@ -44,8 +98,6 @@ export default function InteractiveChatView({version}: Props) {
 
 			void (async () => {
 				try {
-					await getAIResponse(token, CHAT_SYSTEM_PROMPT);
-
 					const fullResponse = await getAIResponse(
 						token,
 						userMessage.content,
@@ -75,7 +127,7 @@ export default function InteractiveChatView({version}: Props) {
 				}
 			})();
 		},
-		[messages, loading, confirmTool, handleToolMessage],
+		[messages, loading, initialized, confirmTool, handleToolMessage],
 	);
 
 	return (
@@ -107,6 +159,8 @@ export default function InteractiveChatView({version}: Props) {
 					<ToolConfirmation call={pending.call} />
 				) : loading ? (
 					<Spinner text="Thinking..." />
+				) : !initialized ? (
+					<Text color="red">Chat initialization failed.</Text>
 				) : (
 					<Box
 						borderStyle="single"

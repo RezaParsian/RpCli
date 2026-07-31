@@ -21,6 +21,8 @@ rp-cli -c -a                  Generate a commit message from all changes (HEAD)
 
 **Interactive chat** (`rp-cli` with no arguments)
 Opens a persistent TUI with the logo, message history, and a text input. Stays open until Ctrl+C.
+The system prompt is sent as soon as interactive mode opens. If the program closes
+before the user sends a message, the unused chat session is deleted automatically.
 
 **Single prompt** (`rp-cli "..."`)
 Sends one question, renders the response as formatted markdown, then exits.
