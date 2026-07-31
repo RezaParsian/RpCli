@@ -33,13 +33,32 @@ Reads your staged git diff, generates a Conventional Commit message, shows it, a
 **Models list** (`rp-cli --models`)
 Prints all available models with their provider and default indicator.
 
+## AI tools
+
+RP-CLI tells the model about three local, read-only tools and automatically executes
+tool calls returned by the model:
+
+- `list_files(path?)` lists a directory.
+- `read_file(path)` reads a UTF-8 file up to 100 KiB.
+- `search_files(query, path?)` searches files and returns up to 50 matching lines.
+
+All paths are restricted to the directory where RP-CLI was started. To add another
+tool, register its description and executor in `source/tools/index.ts`; the system
+prompt is generated from the same registry. Tool calls use this protocol:
+
+```xml
+<tool_call>
+{"name":"read_file","arguments":{"path":"package.json"}}
+</tool_call>
+```
+
 ## Models
 
-| # | Name | Provider | Default |
-|---|------|----------|---------|
-| 1 | GPT 4o mini | OpenAI | |
-| 2 | Step 3.5 Flash | OpenRouter | |
-| 3 | Gemma 4 31b it | OpenRouter | |
-| 4 | GPT OSS 120b | OpenRouter | |
-| 5 | DeepSeek V3.2 | OpenRouter | ✔ |
-| 6 | Qwen3 Coder Next | OpenRouter | |
+| #   | Name             | Provider   | Default |
+| --- | ---------------- | ---------- | ------- |
+| 1   | GPT 4o mini      | OpenAI     |         |
+| 2   | Step 3.5 Flash   | OpenRouter |         |
+| 3   | Gemma 4 31b it   | OpenRouter |         |
+| 4   | GPT OSS 120b     | OpenRouter |         |
+| 5   | DeepSeek V3.2    | OpenRouter | ✔       |
+| 6   | Qwen3 Coder Next | OpenRouter |         |

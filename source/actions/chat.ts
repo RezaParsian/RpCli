@@ -1,5 +1,10 @@
-import sendMessage from "../core/SendMessage.js";
-import {ChatResult} from "../core/Chat.js";
+import sendMessage from '../core/SendMessage.js';
+import {ChatResult} from '../core/Chat.js';
+import {
+	executeTool,
+	parseToolCall,
+	TOOL_SYSTEM_PROMPT,
+} from '../tools/index.js';
 
 export const CHAT_SYSTEM_PROMPT = `You are RP-CLI, an advanced and powerful AI assistant built to help developers with high-quality responses.
 
@@ -15,11 +20,42 @@ Key traits:
 
 You are currently running as "rp-cli" — a command line tool that helps users with AI-powered tasks.
 
-Now, respond to the user's request with excellence.`;
+Now, respond to the user's request with excellence.
+
+${TOOL_SYSTEM_PROMPT}`;
+
+const MAX_TOOL_CALLS = 5;
 
 export async function getAIResponse(
-	token:string,
+	token: string,
 	messages: string,
 ): Promise<ChatResult> {
-	return sendMessage(token,messages);
+	let response = await sendMessage(token, messages);
+
+	for (let index = 0; index < MAX_TOOL_CALLS; index++) {
+		let toolCall;
+		try {
+			toolCall = parseToolCall(response.content ?? '');
+		} catch (error) {
+			response = await sendMessage(
+				token,
+				`The tool call could not be parsed: ${
+					error instanceof Error ? error.message : String(error)
+				}. Send a corrected tool call or answer without a tool.`,
+			);
+			continue;
+		}
+
+		if (!toolCall) return response;
+
+		const result = await executeTool(toolCall);
+		response = await sendMessage(
+			token,
+			`<tool_result name="${toolCall.name}">\n${result}\n</tool_result>\nUse this result to continue answering the user's request.`,
+		);
+	}
+
+	throw new Error(
+		`The assistant exceeded the limit of ${MAX_TOOL_CALLS} tool calls.`,
+	);
 }
