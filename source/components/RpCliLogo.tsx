@@ -15,7 +15,7 @@ export default function RpCliLogo({version}: Props) {
 	return (
 		<Box alignItems="center" marginY={1}>
 			<Gradient name="teen">
-				<BigText text="RpCli"/>
+				<BigText text="RpCli" />
 			</Gradient>
 
 			<Gradient name="teen">
@@ -24,17 +24,12 @@ export default function RpCliLogo({version}: Props) {
 					borderColor="#999"
 					marginLeft={3}
 					width={Math.floor(columns / 3)}
-					height={6}
+					height={5}
 					flexDirection="column"
 					paddingX={1}
 				>
 					<Text>
 						{'>'}_ rp-cli (<Text color="gray">{version ?? '0.0.0'}</Text>)
-					</Text>
-
-					<Text>
-						<Text color="gray">model: </Text>
-						<Text>DeepSeek</Text>
 					</Text>
 
 					<Text>

@@ -9,7 +9,7 @@ import {fileURLToPath} from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 dotenv.config({
-	path: path.join(__dirname,'..', '.env'),
+	path: path.join(__dirname, '..', '.env'),
 	quiet: true,
 });
 
@@ -22,7 +22,6 @@ const cli = meow(
 	  $ rp-cli <prompt>                  Send a single prompt
 	  $ rp-cli -c / --commit-message     Generate commit message from staged changes
 	  $ rp-cli -c -a                     Use git diff HEAD instead of --staged
-	  $ rp-cli --models                  Show available models
 
 	Options
 	  --commit-message, -c  Generate commit message from staged changes
@@ -38,29 +37,23 @@ const cli = meow(
 	{
 		importMeta: import.meta,
 		flags: {
-			models: {type: 'boolean', shortFlag: 'm'},
 			commitMessage: {type: 'boolean', shortFlag: 'c'},
 			commitAll: {type: 'boolean', shortFlag: 'a'},
-			model: {type: 'number'},
 		},
 	},
 );
 
-const selectedModel = 'DeepSeek';
 const prompt = cli.input.join(' ').trim();
 
-const mode = cli.flags.models
-	? 'models'
-	: cli.flags.commitMessage
-		? 'commit'
-		: prompt
-			? 'prompt'
-			: 'interactive';
+const mode = cli.flags.commitMessage
+	? 'commit'
+	: prompt
+	? 'prompt'
+	: 'interactive';
 
 render(
 	<App
 		mode={mode}
-		selectedModel={selectedModel}
 		commitAll={cli.flags.commitAll ?? false}
 		prompt={prompt}
 		version={cli.pkg.version}

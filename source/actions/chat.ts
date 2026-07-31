@@ -1,5 +1,13 @@
-import sendMessage from "../core/SendMessage.js";
-import {ChatResult} from "../core/Chat.js";
+import sendMessage from '../core/SendMessage.js';
+import {ChatResult} from '../core/Chat.js';
+import {
+	executeTool,
+	formatToolActivityMessage,
+	parseToolCall,
+	TOOL_SYSTEM_PROMPT,
+	toolRequiresConfirmation,
+	type ToolCall,
+} from '../tools/index.js';
 
 export const CHAT_SYSTEM_PROMPT = `You are RP-CLI, an advanced and powerful AI assistant built to help developers with high-quality responses.
 
@@ -15,11 +23,53 @@ Key traits:
 
 You are currently running as "rp-cli" — a command line tool that helps users with AI-powered tasks.
 
-Now, respond to the user's request with excellence.`;
+Now, respond to the user's request with excellence.
+
+${TOOL_SYSTEM_PROMPT}`;
 
 export async function getAIResponse(
-	token:string,
+	token: string,
 	messages: string,
+	confirmTool?: (call: ToolCall) => Promise<boolean>,
+	onToolMessage?: (content: string) => void,
 ): Promise<ChatResult> {
-	return sendMessage(token,messages);
+	let response = await sendMessage(token, messages);
+
+	while (true) {
+		let toolCall;
+		try {
+			toolCall = parseToolCall(response.content ?? '');
+		} catch (error) {
+			response = await sendMessage(
+				token,
+				`The tool call could not be parsed: ${
+					error instanceof Error ? error.message : String(error)
+				}. Send a corrected tool call or answer without a tool.`,
+			);
+			continue;
+		}
+
+		if (!toolCall) return response;
+		onToolMessage?.(
+			formatToolActivityMessage(response.content ?? '', toolCall),
+		);
+
+		const runTool = async () => {
+			return executeTool(toolCall);
+		};
+
+		let result: string;
+		if (toolRequiresConfirmation(toolCall.name)) {
+			const approved = confirmTool ? await confirmTool(toolCall) : false;
+			result = approved
+				? await runTool()
+				: JSON.stringify({ok: false, error: 'User denied this tool call.'});
+		} else {
+			result = await runTool();
+		}
+		response = await sendMessage(
+			token,
+			`<tool_result name="${toolCall.name}">\n${result}\n</tool_result>\nUse this result to continue answering the user's request.`,
+		);
+	}
 }
