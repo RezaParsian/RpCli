@@ -5,6 +5,7 @@ import RpCliLogo from './RpCliLogo.js';
 import Spinner from './Spinner.js';
 import MarkdownText from './MarkdownText.js';
 import {CHAT_SYSTEM_PROMPT, getAIResponse} from '../actions/chat.js';
+import {ToolConfirmation, useToolConfirmation} from './ToolConfirmation.js';
 
 type Message = {
 	role: 'user' | 'assistant';
@@ -15,12 +16,13 @@ type Props = {
 	version?: string;
 };
 
-const token = process.env["DEEPSEEK_TOKEN"];
+const token = process.env['DEEPSEEK_TOKEN'];
 
-export default function InteractiveChatView({ version}: Props) {
+export default function InteractiveChatView({version}: Props) {
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [input, setInput] = useState('');
 	const [loading, setLoading] = useState(false);
+	const {pending, confirmTool} = useToolConfirmation();
 
 	if (!token) throw new Error('No token provided');
 
@@ -39,33 +41,42 @@ export default function InteractiveChatView({ version}: Props) {
 
 			void (async () => {
 				try {
-					await getAIResponse(token, CHAT_SYSTEM_PROMPT)
+					await getAIResponse(token, CHAT_SYSTEM_PROMPT);
 
-					const fullResponse = await getAIResponse(token, userMessage.content);
+					const fullResponse = await getAIResponse(
+						token,
+						userMessage.content,
+						confirmTool,
+					);
 
-					setMessages(prev => [...prev, {
-						role: 'assistant',
-						content: fullResponse.content ?? 'Ai Error!'
-					}]);
+					setMessages(prev => [
+						...prev,
+						{
+							role: 'assistant',
+							content: fullResponse.content ?? 'Ai Error!',
+						},
+					]);
 				} catch (err) {
 					setMessages(prev => [
 						...prev,
 						{
 							role: 'assistant',
-							content: `Error: ${err instanceof Error ? err.message : String(err)}`,
-						}
+							content: `Error: ${
+								err instanceof Error ? err.message : String(err)
+							}`,
+						},
 					]);
 				} finally {
 					setLoading(false);
 				}
 			})();
 		},
-		[messages, loading],
+		[messages, loading, confirmTool],
 	);
 
 	return (
 		<Box flexDirection="column">
-			<RpCliLogo version={version}/>
+			<RpCliLogo version={version} />
 
 			<Box flexDirection="column" marginX={1}>
 				{messages.map((msg, i) => (
@@ -73,32 +84,43 @@ export default function InteractiveChatView({ version}: Props) {
 						{msg.role === 'user' ? (
 							<Box>
 								<Text color="magenta" bold>
-									{'> '}{msg.content}
+									{'> '}
+									{msg.content}
 								</Text>
 							</Box>
 						) : (
 							<Box>
-								<Text color="magenta" bold>✦ </Text>
-								<MarkdownText text={msg.content}/>
+								<Text color="magenta" bold>
+									✦{' '}
+								</Text>
+								<MarkdownText text={msg.content} />
 							</Box>
 						)}
 					</Box>
 				))}
 
-				{loading ? <Spinner text="Thinking..."/>
-					: (
-						<Box borderStyle="single" borderLeft={false} borderRight={false} borderColor="cyan">
-							<Text color="magenta" bold>
-								{'> '}
-							</Text>
-							<TextInput
-								value={input}
-								onChange={setInput}
-								onSubmit={handleSubmit}
-								placeholder="Type your message..."
-							/>
-						</Box>
-					)}
+				{pending ? (
+					<ToolConfirmation call={pending.call} />
+				) : loading ? (
+					<Spinner text="Thinking..." />
+				) : (
+					<Box
+						borderStyle="single"
+						borderLeft={false}
+						borderRight={false}
+						borderColor="cyan"
+					>
+						<Text color="magenta" bold>
+							{'> '}
+						</Text>
+						<TextInput
+							value={input}
+							onChange={setInput}
+							onSubmit={handleSubmit}
+							placeholder="Type your message..."
+						/>
+					</Box>
+				)}
 			</Box>
 		</Box>
 	);

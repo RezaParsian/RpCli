@@ -35,12 +35,16 @@ Prints all available models with their provider and default indicator.
 
 ## AI tools
 
-RP-CLI tells the model about three local, read-only tools and automatically executes
+RP-CLI tells the model about local tools and automatically executes
 tool calls returned by the model:
 
-- `list_files(path?)` lists a directory.
+- `list_directory(path?)` lists a directory.
 - `read_file(path)` reads a UTF-8 file up to 100 KiB.
+- `write_file(path, content)` creates or overwrites a file.
+- `edit_file(path, old_text, new_text)` performs a unique exact replacement.
+- `delete_file(path)` deletes a file after user confirmation.
 - `search_files(query, path?)` searches files and returns up to 50 matching lines.
+- `run_command(command)` runs a shell command after user confirmation.
 
 All paths are restricted to the directory where RP-CLI was started. To add another
 tool, register its description and executor in `source/tools/index.ts`; the system

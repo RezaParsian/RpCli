@@ -1,5 +1,7 @@
 import {promises as fs} from 'node:fs';
 import path from 'node:path';
+import {exec as execCallback} from 'node:child_process';
+import {promisify} from 'node:util';
 
 export type ToolCall = {
 	name: string;
@@ -10,10 +12,12 @@ type Tool = {
 	name: string;
 	description: string;
 	execute: (arguments_: Record<string, unknown>) => Promise<unknown>;
+	requiresConfirmation?: boolean;
 };
 
 const rootDirectory = process.cwd();
 const ignoredDirectories = new Set(['.git', 'dist', 'node_modules']);
+const exec = promisify(execCallback);
 
 function stringArgument(
 	arguments_: Record<string, unknown>,
@@ -23,6 +27,18 @@ function stringArgument(
 	const value = arguments_[name] ?? fallback;
 	if (typeof value !== 'string' || value.length === 0) {
 		throw new TypeError(`Argument "${name}" must be a non-empty string.`);
+	}
+
+	return value;
+}
+
+function textArgument(
+	arguments_: Record<string, unknown>,
+	name: string,
+): string {
+	const value = arguments_[name];
+	if (typeof value !== 'string') {
+		throw new TypeError(`Argument "${name}" must be a string.`);
 	}
 
 	return value;
@@ -49,6 +65,20 @@ async function safePath(requestedPath: string): Promise<string> {
 	return realPath;
 }
 
+async function safeTargetPath(requestedPath: string): Promise<string> {
+	const resolvedPath = path.resolve(rootDirectory, requestedPath);
+	const relativePath = path.relative(rootDirectory, resolvedPath);
+	if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+		throw new Error(
+			'The requested path is outside the current working directory.',
+		);
+	}
+
+	// Resolve the parent so a symlink cannot redirect a new file outside the workspace.
+	const parent = await safePath(path.dirname(requestedPath));
+	return path.join(parent, path.basename(resolvedPath));
+}
+
 async function walk(directory: string): Promise<string[]> {
 	const entries = await fs.readdir(directory, {withFileTypes: true});
 	const files: string[] = [];
@@ -69,9 +99,9 @@ async function walk(directory: string): Promise<string[]> {
 
 const tools: Tool[] = [
 	{
-		name: 'list_files',
+		name: 'list_directory',
 		description:
-			'list_files(path?: string) - Lists files and directories at a path inside the current working directory.',
+			'list_directory(path?: string) - Lists files and directories at a path inside the current working directory.',
 		async execute(arguments_) {
 			const requestedPath = stringArgument(arguments_, 'path', '.');
 			const directory = await safePath(requestedPath);
@@ -79,6 +109,56 @@ const tools: Tool[] = [
 			return entries.map(
 				entry => `${entry.isDirectory() ? 'directory' : 'file'}\t${entry.name}`,
 			);
+		},
+	},
+	{
+		name: 'write_file',
+		description:
+			'write_file(path: string, content: string) - Creates or completely overwrites a UTF-8 file inside the current working directory.',
+		async execute(arguments_) {
+			const filePath = await safeTargetPath(stringArgument(arguments_, 'path'));
+			const content = textArgument(arguments_, 'content');
+			await fs.writeFile(filePath, content, 'utf8');
+			return `Wrote ${Buffer.byteLength(content, 'utf8')} bytes.`;
+		},
+	},
+	{
+		name: 'edit_file',
+		description:
+			'edit_file(path: string, old_text: string, new_text: string) - Replaces one unique exact text occurrence in a UTF-8 file.',
+		async execute(arguments_) {
+			const filePath = await safePath(stringArgument(arguments_, 'path'));
+			const oldText = stringArgument(arguments_, 'old_text');
+			const newText = textArgument(arguments_, 'new_text');
+			const content = await fs.readFile(filePath, 'utf8');
+			const firstIndex = content.indexOf(oldText);
+			if (firstIndex === -1)
+				throw new Error('old_text was not found in the file.');
+			if (content.indexOf(oldText, firstIndex + oldText.length) !== -1) {
+				throw new Error('old_text is not unique in the file.');
+			}
+
+			await fs.writeFile(
+				filePath,
+				content.slice(0, firstIndex) +
+					newText +
+					content.slice(firstIndex + oldText.length),
+				'utf8',
+			);
+			return 'File edited successfully.';
+		},
+	},
+	{
+		name: 'delete_file',
+		description:
+			'delete_file(path: string) - Deletes one file inside the current working directory. Requires user confirmation.',
+		requiresConfirmation: true,
+		async execute(arguments_) {
+			const filePath = await safePath(stringArgument(arguments_, 'path'));
+			const stats = await fs.stat(filePath);
+			if (!stats.isFile()) throw new Error('The requested path is not a file.');
+			await fs.unlink(filePath);
+			return 'File deleted successfully.';
 		},
 	},
 	{
@@ -122,6 +202,21 @@ const tools: Tool[] = [
 			}
 
 			return matches;
+		},
+	},
+	{
+		name: 'run_command',
+		description:
+			'run_command(command: string) - Runs a shell command in the current working directory. Requires user confirmation.',
+		requiresConfirmation: true,
+		async execute(arguments_) {
+			const command = stringArgument(arguments_, 'command');
+			const {stdout, stderr} = await exec(command, {
+				cwd: rootDirectory,
+				timeout: 60_000,
+				maxBuffer: 1024 * 1024,
+			});
+			return {stdout, stderr};
 		},
 	},
 ];
@@ -177,4 +272,8 @@ export async function executeTool(call: ToolCall): Promise<string> {
 			error: error instanceof Error ? error.message : String(error),
 		});
 	}
+}
+
+export function toolRequiresConfirmation(name: string): boolean {
+	return tools.find(tool => tool.name === name)?.requiresConfirmation ?? false;
 }
