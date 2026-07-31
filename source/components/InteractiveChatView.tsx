@@ -22,8 +22,10 @@ export default function InteractiveChatView({version}: Props) {
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [input, setInput] = useState('');
 	const [loading, setLoading] = useState(false);
-	const [toolActivity, setToolActivity] = useState<string>();
 	const {pending, confirmTool} = useToolConfirmation();
+	const handleToolMessage = useCallback((content: string) => {
+		setMessages(previous => [...previous, {role: 'assistant', content}]);
+	}, []);
 
 	if (!token) throw new Error('No token provided');
 
@@ -48,7 +50,7 @@ export default function InteractiveChatView({version}: Props) {
 						token,
 						userMessage.content,
 						confirmTool,
-						setToolActivity,
+						handleToolMessage,
 					);
 
 					setMessages(prev => [
@@ -73,7 +75,7 @@ export default function InteractiveChatView({version}: Props) {
 				}
 			})();
 		},
-		[messages, loading, confirmTool],
+		[messages, loading, confirmTool, handleToolMessage],
 	);
 
 	return (
@@ -103,8 +105,6 @@ export default function InteractiveChatView({version}: Props) {
 
 				{pending ? (
 					<ToolConfirmation call={pending.call} />
-				) : toolActivity ? (
-					<Spinner text={toolActivity} />
 				) : loading ? (
 					<Spinner text="Thinking..." />
 				) : (

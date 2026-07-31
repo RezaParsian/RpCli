@@ -2,7 +2,7 @@ import sendMessage from '../core/SendMessage.js';
 import {ChatResult} from '../core/Chat.js';
 import {
 	executeTool,
-	describeToolActivity,
+	formatToolActivityMessage,
 	parseToolCall,
 	TOOL_SYSTEM_PROMPT,
 	toolRequiresConfirmation,
@@ -27,13 +27,11 @@ Now, respond to the user's request with excellence.
 
 ${TOOL_SYSTEM_PROMPT}`;
 
-const TOOL_ACTIVITY_RENDER_DELAY_MS = 150;
-
 export async function getAIResponse(
 	token: string,
 	messages: string,
 	confirmTool?: (call: ToolCall) => Promise<boolean>,
-	onToolActivity?: (activity?: string) => void,
+	onToolMessage?: (content: string) => void,
 ): Promise<ChatResult> {
 	let response = await sendMessage(token, messages);
 
@@ -52,20 +50,12 @@ export async function getAIResponse(
 		}
 
 		if (!toolCall) return response;
+		onToolMessage?.(
+			formatToolActivityMessage(response.content ?? '', toolCall),
+		);
 
 		const runTool = async () => {
-			onToolActivity?.(describeToolActivity(toolCall));
-			try {
-				// Give Ink a render cycle before a fast filesystem tool completes.
-				if (onToolActivity) {
-					await new Promise(resolve => {
-						setTimeout(resolve, TOOL_ACTIVITY_RENDER_DELAY_MS);
-					});
-				}
-				return await executeTool(toolCall);
-			} finally {
-				onToolActivity?.();
-			}
+			return executeTool(toolCall);
 		};
 
 		let result: string;

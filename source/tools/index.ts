@@ -281,29 +281,30 @@ export function toolRequiresConfirmation(name: string): boolean {
 export function describeToolActivity(call: ToolCall): string {
 	const pathValue =
 		typeof call.arguments['path'] === 'string' ? call.arguments['path'] : '.';
+	const pathLabel = pathValue === '.' ? 'the current directory' : pathValue;
 
 	switch (call.name) {
 		case 'list_directory': {
-			return `Listing directory ${pathValue}...`;
+			return `Listing ${pathLabel}...`;
 		}
 		case 'read_file': {
-			return `Reading ${pathValue}...`;
+			return `Reading ${pathLabel}...`;
 		}
 		case 'write_file': {
-			return `Writing to ${pathValue}...`;
+			return `Writing to ${pathLabel}...`;
 		}
 		case 'edit_file': {
-			return `Editing ${pathValue}...`;
+			return `Editing ${pathLabel}...`;
 		}
 		case 'delete_file': {
-			return `Deleting ${pathValue}...`;
+			return `Deleting ${pathLabel}...`;
 		}
 		case 'search_files': {
 			const query =
 				typeof call.arguments['query'] === 'string'
 					? call.arguments['query']
 					: '';
-			return `Searching for "${query}" in ${pathValue}...`;
+			return `Searching for "${query}" in ${pathLabel}...`;
 		}
 		case 'run_command': {
 			const command =
@@ -316,4 +317,14 @@ export function describeToolActivity(call: ToolCall): string {
 			return `Running ${call.name}...`;
 		}
 	}
+}
+
+export function formatToolActivityMessage(
+	assistantContent: string,
+	call: ToolCall,
+): string {
+	return assistantContent.replace(
+		/<tool_call>\s*[\s\S]*?\s*<\/tool_call>/,
+		`🔧 ${describeToolActivity(call)}`,
+	);
 }

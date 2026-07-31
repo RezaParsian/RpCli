@@ -41,8 +41,9 @@ tool calls returned by the model:
 - `search_files(query, path?)` searches files and returns up to 50 matching lines.
 - `run_command(command)` runs a shell command after user confirmation.
 
-While a tool is running, RP-CLI displays its current activity, including the target
-path, search query, or command where applicable.
+For each tool call, RP-CLI keeps the assistant's explanatory text in the chat and
+replaces the raw `<tool_call>` JSON with a human-readable activity message. These
+messages remain in the conversation history instead of disappearing after execution.
 The assistant can chain as many tool calls as the task requires.
 
 All paths are restricted to the directory where RP-CLI was started. To add another

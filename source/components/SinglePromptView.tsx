@@ -1,5 +1,5 @@
-import React, {useEffect, useState} from 'react';
-import {Text, useApp} from 'ink';
+import React, {useCallback, useEffect, useState} from 'react';
+import {Box, Text, useApp} from 'ink';
 import Spinner from './Spinner.js';
 import MarkdownText from './MarkdownText.js';
 import {CHAT_SYSTEM_PROMPT, getAIResponse} from '../actions/chat.js';
@@ -19,8 +19,11 @@ export default function SinglePromptView({prompt}: Props) {
 	const [state, setState] = useState<State>('loading');
 	const [response, setResponse] = useState('');
 	const [error, setError] = useState('');
-	const [toolActivity, setToolActivity] = useState<string>();
+	const [toolMessages, setToolMessages] = useState<string[]>([]);
 	const {pending, confirmTool} = useToolConfirmation();
+	const handleToolMessage = useCallback((content: string) => {
+		setToolMessages(previous => [...previous, content]);
+	}, []);
 
 	if (!token) throw new Error('No token provided');
 
@@ -33,7 +36,7 @@ export default function SinglePromptView({prompt}: Props) {
 					token,
 					prompt,
 					confirmTool,
-					setToolActivity,
+					handleToolMessage,
 				);
 
 				deleteSession(token, fullResponse.sessionId);
@@ -46,7 +49,7 @@ export default function SinglePromptView({prompt}: Props) {
 				setState('error');
 			}
 		})();
-	}, [prompt, confirmTool]);
+	}, [prompt, confirmTool, handleToolMessage]);
 
 	useEffect(() => {
 		if (state !== 'done' && state !== 'error') return;
@@ -62,12 +65,20 @@ export default function SinglePromptView({prompt}: Props) {
 		);
 	}
 
-	if (pending) return <ToolConfirmation call={pending.call} />;
-	if (toolActivity) return <Spinner text={toolActivity} />;
-
-	if (!response) {
-		return <Spinner text="Thinking..." />;
-	}
-
-	return <MarkdownText text={response} />;
+	return (
+		<Box flexDirection="column">
+			{toolMessages.map((message, index) => (
+				<Box key={index} marginBottom={1}>
+					<MarkdownText text={message} />
+				</Box>
+			))}
+			{pending ? (
+				<ToolConfirmation call={pending.call} />
+			) : response ? (
+				<MarkdownText text={response} />
+			) : (
+				<Spinner text="Thinking..." />
+			)}
+		</Box>
+	);
 }
