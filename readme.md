@@ -43,6 +43,7 @@ tool calls returned by the model:
 
 While a tool is running, RP-CLI displays its current activity, including the target
 path, search query, or command where applicable.
+The assistant can chain as many tool calls as the task requires.
 
 All paths are restricted to the directory where RP-CLI was started. To add another
 tool, register its description and executor in `source/tools/index.ts`; the system

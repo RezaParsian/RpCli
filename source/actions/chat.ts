@@ -27,7 +27,7 @@ Now, respond to the user's request with excellence.
 
 ${TOOL_SYSTEM_PROMPT}`;
 
-const MAX_TOOL_CALLS = 5;
+const TOOL_ACTIVITY_RENDER_DELAY_MS = 150;
 
 export async function getAIResponse(
 	token: string,
@@ -37,7 +37,7 @@ export async function getAIResponse(
 ): Promise<ChatResult> {
 	let response = await sendMessage(token, messages);
 
-	for (let index = 0; index < MAX_TOOL_CALLS; index++) {
+	while (true) {
 		let toolCall;
 		try {
 			toolCall = parseToolCall(response.content ?? '');
@@ -56,6 +56,12 @@ export async function getAIResponse(
 		const runTool = async () => {
 			onToolActivity?.(describeToolActivity(toolCall));
 			try {
+				// Give Ink a render cycle before a fast filesystem tool completes.
+				if (onToolActivity) {
+					await new Promise(resolve => {
+						setTimeout(resolve, TOOL_ACTIVITY_RENDER_DELAY_MS);
+					});
+				}
 				return await executeTool(toolCall);
 			} finally {
 				onToolActivity?.();
@@ -76,8 +82,4 @@ export async function getAIResponse(
 			`<tool_result name="${toolCall.name}">\n${result}\n</tool_result>\nUse this result to continue answering the user's request.`,
 		);
 	}
-
-	throw new Error(
-		`The assistant exceeded the limit of ${MAX_TOOL_CALLS} tool calls.`,
-	);
 }
