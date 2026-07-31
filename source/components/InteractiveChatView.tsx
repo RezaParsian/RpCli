@@ -22,9 +22,10 @@ const token = process.env['DEEPSEEK_TOKEN'];
 export default function InteractiveChatView({version}: Props) {
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [input, setInput] = useState('');
-	const [loading, setLoading] = useState(true);
-	const [initialized, setInitialized] = useState(false);
+	const [loading, setLoading] = useState(false);
 	const sessionId = useRef<string>();
+	const initialization = useRef<Promise<void>>();
+	const initializationSucceeded = useRef(false);
 	const hasUserMessage = useRef(false);
 	const unmounted = useRef(false);
 	const sessionDeleted = useRef(false);
@@ -49,16 +50,15 @@ export default function InteractiveChatView({version}: Props) {
 	}, []);
 
 	useEffect(() => {
-		void (async () => {
+		initialization.current = (async () => {
 			try {
 				const response = await getAIResponse(token, CHAT_SYSTEM_PROMPT);
 				sessionId.current = response.sessionId;
+				initializationSucceeded.current = true;
 				if (unmounted.current) {
 					deleteUnusedSession();
 					return;
 				}
-
-				setInitialized(true);
 			} catch (error) {
 				if (!unmounted.current) {
 					setMessages(previous => [
@@ -71,8 +71,6 @@ export default function InteractiveChatView({version}: Props) {
 						},
 					]);
 				}
-			} finally {
-				if (!unmounted.current) setLoading(false);
 			}
 		})();
 
@@ -84,7 +82,7 @@ export default function InteractiveChatView({version}: Props) {
 
 	const handleSubmit = useCallback(
 		(value: string) => {
-			if (!value.trim() || loading || !initialized) return;
+			if (!value.trim() || loading) return;
 			hasUserMessage.current = true;
 
 			const userMessage: Message = {
@@ -98,6 +96,9 @@ export default function InteractiveChatView({version}: Props) {
 
 			void (async () => {
 				try {
+					await initialization.current;
+					if (!initializationSucceeded.current) return;
+
 					const fullResponse = await getAIResponse(
 						token,
 						userMessage.content,
@@ -127,7 +128,7 @@ export default function InteractiveChatView({version}: Props) {
 				}
 			})();
 		},
-		[messages, loading, initialized, confirmTool, handleToolMessage],
+		[messages, loading, confirmTool, handleToolMessage],
 	);
 
 	return (
@@ -159,8 +160,6 @@ export default function InteractiveChatView({version}: Props) {
 					<ToolConfirmation call={pending.call} />
 				) : loading ? (
 					<Spinner text="Thinking..." />
-				) : !initialized ? (
-					<Text color="red">Chat initialization failed.</Text>
 				) : (
 					<Box
 						borderStyle="single"
