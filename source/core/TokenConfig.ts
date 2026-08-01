@@ -1,4 +1,4 @@
-import {mkdir, writeFile} from 'node:fs/promises';
+import {mkdir, rm, writeFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -18,4 +18,8 @@ export async function saveDeepSeekToken(token: string): Promise<void> {
 			mode: 0o600,
 		},
 	);
+}
+
+export async function clearDeepSeekToken(): Promise<void> {
+	await rm(tokenConfigPath, {force: true});
 }

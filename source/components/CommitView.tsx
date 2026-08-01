@@ -6,6 +6,7 @@ import {
 	generateCommitMessage,
 	getGitDiff,
 } from '../actions/commitMessage.js';
+import {isInvalidTokenError} from '../core/InvalidTokenError.js';
 
 type State =
 	| 'init'
@@ -20,9 +21,10 @@ type State =
 type Props = {
 	useAll: boolean;
 	token: string;
+	onInvalidToken: () => void;
 };
 
-export default function CommitView({useAll, token}: Props) {
+export default function CommitView({useAll, token, onInvalidToken}: Props) {
 	const {exit} = useApp();
 	const [state, setState] = useState<State>('init');
 	const [commitMessage, setCommitMessage] = useState('');
@@ -51,11 +53,15 @@ export default function CommitView({useAll, token}: Props) {
 				setCommitMessage(message);
 				setState('review');
 			} catch (err) {
+				if (isInvalidTokenError(err)) {
+					onInvalidToken();
+					return;
+				}
 				setError(err instanceof Error ? err.message : String(err));
 				setState('error');
 			}
 		})();
-	}, [useAll, token]);
+	}, [useAll, token, onInvalidToken]);
 
 	useEffect(() => {
 		if (state !== 'committing') return;

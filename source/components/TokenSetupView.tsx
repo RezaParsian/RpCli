@@ -1,5 +1,5 @@
 import React, {useEffect, useState} from 'react';
-import {Box, Text, useApp} from 'ink';
+import {Box, Text} from 'ink';
 import TextInput from 'ink-text-input';
 import openDeepSeek, {
 	DEEPSEEK_TOKEN_COMMAND,
@@ -7,8 +7,11 @@ import openDeepSeek, {
 } from '../core/OpenDeepSeek.js';
 import {saveDeepSeekToken} from '../core/TokenConfig.js';
 
-export default function TokenSetupView() {
-	const {exit} = useApp();
+type Props = {
+	onTokenSaved: (token: string) => void;
+};
+
+export default function TokenSetupView({onTokenSaved}: Props) {
 	const [token, setToken] = useState('');
 	const [status, setStatus] = useState<'input' | 'saving' | 'saved' | 'error'>(
 		'input',
@@ -29,7 +32,7 @@ export default function TokenSetupView() {
 				process.env['DEEPSEEK_TOKEN'] = normalizedToken;
 				setToken('');
 				setStatus('saved');
-				setTimeout(() => exit(), 1000);
+				onTokenSaved(normalizedToken);
 			})
 			.catch((error: unknown) => {
 				setError(error instanceof Error ? error.message : String(error));

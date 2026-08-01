@@ -1,3 +1,5 @@
+import {assertValidTokenResponse} from './InvalidTokenError.js';
+
 interface ChatProps {
 	token: string;
 	model_type?: 'default' | 'expert' | 'vision'
@@ -64,11 +66,13 @@ export default async function chat({
 			}),
 		}
 	);
+	assertValidTokenResponse(response);
 
 	const contentType = response.headers.get("content-type");
 
 	if (!contentType || !contentType.includes("text/event-stream")) {
 		const json = await response.json();
+		assertValidTokenResponse(response, json);
 		if (json.data?.biz_code && json.data.biz_code !== 0) {
 			return {
 				ok: false,

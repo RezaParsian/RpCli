@@ -7,6 +7,7 @@ import MarkdownText from './MarkdownText.js';
 import {CHAT_SYSTEM_PROMPT, getAIResponse} from '../actions/chat.js';
 import {ToolConfirmation, useToolConfirmation} from './ToolConfirmation.js';
 import deleteSession from '../core/DeleteSession.js';
+import {isInvalidTokenError} from '../core/InvalidTokenError.js';
 
 type Message = {
 	role: 'user' | 'assistant';
@@ -16,9 +17,14 @@ type Message = {
 type Props = {
 	version?: string;
 	token: string;
+	onInvalidToken: () => void;
 };
 
-export default function InteractiveChatView({version, token}: Props) {
+export default function InteractiveChatView({
+	version,
+	token,
+	onInvalidToken,
+}: Props) {
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [input, setInput] = useState('');
 	const [loading, setLoading] = useState(false);
@@ -57,6 +63,10 @@ export default function InteractiveChatView({version, token}: Props) {
 					return;
 				}
 			} catch (error) {
+				if (isInvalidTokenError(error)) {
+					onInvalidToken();
+					return;
+				}
 				if (!unmounted.current) {
 					setMessages(previous => [
 						...previous,
@@ -75,7 +85,7 @@ export default function InteractiveChatView({version, token}: Props) {
 			unmounted.current = true;
 			deleteUnusedSession();
 		};
-	}, [deleteUnusedSession]);
+	}, [deleteUnusedSession, onInvalidToken, token]);
 
 	const handleSubmit = useCallback(
 		(value: string) => {
@@ -111,6 +121,10 @@ export default function InteractiveChatView({version, token}: Props) {
 						},
 					]);
 				} catch (err) {
+					if (isInvalidTokenError(err)) {
+						onInvalidToken();
+						return;
+					}
 					setMessages(prev => [
 						...prev,
 						{
@@ -125,7 +139,7 @@ export default function InteractiveChatView({version, token}: Props) {
 				}
 			})();
 		},
-		[messages, loading, confirmTool, handleToolMessage],
+		[loading, token, confirmTool, handleToolMessage, onInvalidToken],
 	);
 
 	return (
