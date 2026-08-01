@@ -1,14 +1,41 @@
-import React, {useEffect} from 'react';
-import {Box, Text} from 'ink';
+import React, {useEffect, useState} from 'react';
+import {Box, Text, useApp} from 'ink';
+import TextInput from 'ink-text-input';
 import openDeepSeek, {
 	DEEPSEEK_TOKEN_COMMAND,
 	DEEPSEEK_URL,
 } from '../core/OpenDeepSeek.js';
+import {saveDeepSeekToken} from '../core/TokenConfig.js';
 
 export default function TokenSetupView() {
+	const {exit} = useApp();
+	const [token, setToken] = useState('');
+	const [status, setStatus] = useState<'input' | 'saving' | 'saved' | 'error'>(
+		'input',
+	);
+	const [error, setError] = useState('');
+
 	useEffect(() => {
 		openDeepSeek();
 	}, []);
+
+	const handleSubmit = (value: string) => {
+		const normalizedToken = value.trim();
+		if (!normalizedToken || status !== 'input') return;
+
+		setStatus('saving');
+		void saveDeepSeekToken(normalizedToken)
+			.then(() => {
+				process.env['DEEPSEEK_TOKEN'] = normalizedToken;
+				setToken('');
+				setStatus('saved');
+				setTimeout(() => exit(), 1000);
+			})
+			.catch((error: unknown) => {
+				setError(error instanceof Error ? error.message : String(error));
+				setStatus('error');
+			});
+	};
 
 	return (
 		<Box flexDirection="column">
@@ -22,7 +49,29 @@ export default function TokenSetupView() {
 			<Box borderStyle="single" paddingX={1} marginY={1}>
 				<Text color="cyan">{DEEPSEEK_TOKEN_COMMAND}</Text>
 			</Box>
-			<Text>3. Send us the returned value so we can configure RP-CLI.</Text>
+			<Text>3. Paste the returned value below and press Enter:</Text>
+			{status === 'input' ? (
+				<Box>
+					<Text color="magenta" bold>
+						{'Token: '}
+					</Text>
+					<TextInput
+						value={token}
+						onChange={setToken}
+						onSubmit={handleSubmit}
+						mask="*"
+						placeholder="Paste your token here"
+					/>
+				</Box>
+			) : status === 'saving' ? (
+				<Text color="yellow">Saving token...</Text>
+			) : status === 'saved' ? (
+				<Text color="green" bold>
+					✓ Token saved. Run RP-CLI again to continue.
+				</Text>
+			) : (
+				<Text color="red">✖ Could not save token: {error}</Text>
+			)}
 		</Box>
 	);
 }

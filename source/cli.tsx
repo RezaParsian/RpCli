@@ -5,11 +5,12 @@ import meow from 'meow';
 import dotenv from 'dotenv';
 import path from 'path';
 import {fileURLToPath} from 'url';
+import {tokenConfigPath} from './core/TokenConfig.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 dotenv.config({
-	path: path.join(__dirname, '..', '.env'),
+	path: [tokenConfigPath, path.join(__dirname, '..', '.env')],
 	quiet: true,
 });
 
