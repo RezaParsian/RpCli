@@ -23,17 +23,13 @@ export default function MultiLineInput({
 	};
 
 	useInput((input, key) => {
-		// Legacy terminals commonly encode Shift+Enter as Meta+Enter.
-		if (
-			(key.ctrl && input === 'j') ||
-			(key.return && (key.shift || key.meta))
-		) {
-			updateValue(`${currentValue.current}\n`);
+		if (key.return && key.ctrl) {
+			onSubmit(currentValue.current);
 			return;
 		}
 
 		if (key.return) {
-			onSubmit(currentValue.current);
+			updateValue(`${currentValue.current}\n`);
 			return;
 		}
 

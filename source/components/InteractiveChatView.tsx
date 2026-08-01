@@ -189,9 +189,7 @@ export default function InteractiveChatView({
 								placeholder="Type your message..."
 							/>
 						</Box>
-						<Text dimColor>
-							Enter to send · Ctrl+J or Shift+Enter for a new line
-						</Text>
+						<Text dimColor>Enter for a new line · Ctrl+Enter to send</Text>
 					</>
 				)}
 			</Box>
