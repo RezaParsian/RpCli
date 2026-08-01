@@ -199,9 +199,8 @@ export default function InteractiveChatView({
 								rows={3}
 								textStyle={{color: 'white'}}
 								keyBindings={{
-									submit: (_input: string, key: Key) => key.return && key.ctrl,
-									newline: (_input: string, key: Key) =>
-										key.return && !key.ctrl,
+									submit: (key: Key) => key.return && key.ctrl,
+									newline: (key: Key) => key.return && !key.ctrl,
 								}}
 							/>
 						</Box>
