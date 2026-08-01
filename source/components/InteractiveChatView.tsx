@@ -1,6 +1,5 @@
 import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {Box, Text} from 'ink';
-import TextInput from 'ink-text-input';
 import RpCliLogo from './RpCliLogo.js';
 import Spinner from './Spinner.js';
 import MarkdownText from './MarkdownText.js';
@@ -8,6 +7,7 @@ import {CHAT_SYSTEM_PROMPT, getAIResponse} from '../actions/chat.js';
 import {ToolConfirmation, useToolConfirmation} from './ToolConfirmation.js';
 import deleteSession from '../core/DeleteSession.js';
 import {isInvalidTokenError} from '../core/InvalidTokenError.js';
+import {MultilineInput} from "ink-multiline-input";
 
 type Message = {
 	role: 'user' | 'assistant';
@@ -21,10 +21,10 @@ type Props = {
 };
 
 export default function InteractiveChatView({
-	version,
-	token,
-	onInvalidToken,
-}: Props) {
+												version,
+												token,
+												onInvalidToken,
+											}: Props) {
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [input, setInput] = useState('');
 	const [loading, setLoading] = useState(false);
@@ -89,6 +89,7 @@ export default function InteractiveChatView({
 
 	const handleSubmit = useCallback(
 		(value: string) => {
+			console.log(value)
 			if (!value.trim() || loading) return;
 			hasUserMessage.current = true;
 
@@ -144,7 +145,7 @@ export default function InteractiveChatView({
 
 	return (
 		<Box flexDirection="column">
-			<RpCliLogo version={version} />
+			<RpCliLogo version={version}/>
 
 			<Box flexDirection="column" marginX={1}>
 				{messages.map((msg, i) => (
@@ -161,32 +162,45 @@ export default function InteractiveChatView({
 								<Text color="magenta" bold>
 									✦{' '}
 								</Text>
-								<MarkdownText text={msg.content} />
+								<MarkdownText text={msg.content}/>
 							</Box>
 						)}
 					</Box>
 				))}
 
 				{pending ? (
-					<ToolConfirmation call={pending.call} />
+					<ToolConfirmation call={pending.call}/>
 				) : loading ? (
-					<Spinner text="Thinking..." />
+					<Spinner text="Thinking..."/>
 				) : (
 					<Box
 						borderStyle="single"
 						borderLeft={false}
 						borderRight={false}
 						borderColor="cyan"
+						flexDirection="column"
 					>
-						<Text color="magenta" bold>
-							{'> '}
-						</Text>
-						<TextInput
-							value={input}
-							onChange={setInput}
-							onSubmit={handleSubmit}
-							placeholder="Type your message..."
-						/>
+						<Box>
+							<Text color="magenta" bold>
+								{'> '}
+							</Text>
+
+							{input === '' && (
+								<Text dimColor>Type your message... (Ctrl+Enter to submit)</Text>
+							)}
+
+							<MultilineInput
+								value={input}
+								onChange={setInput}
+								onSubmit={handleSubmit}
+								rows={3}
+								textStyle={{color: 'white'}}
+								keyBindings={{
+									submit: (key) => key.ctrl && key.return, // Ctrl+Enter to submit
+									newline: (key) => key.return, // Enter for newline (default)
+								}}
+							/>
+						</Box>
 					</Box>
 				)}
 			</Box>

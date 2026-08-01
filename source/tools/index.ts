@@ -213,7 +213,6 @@ const tools: Tool[] = [
 			const command = stringArgument(arguments_, 'command');
 			const {stdout, stderr} = await exec(command, {
 				cwd: rootDirectory,
-				timeout: 60_000,
 				maxBuffer: 1024 * 1024,
 			});
 			return {stdout, stderr};

@@ -45,8 +45,8 @@ const prompt = cli.input.join(' ').trim();
 const mode = cli.flags.commitMessage
 	? 'commit'
 	: prompt
-	? 'prompt'
-	: 'interactive';
+		? 'prompt'
+		: 'interactive';
 
 render(
 	<App
@@ -55,4 +55,5 @@ render(
 		prompt={prompt}
 		version={cli.pkg.version}
 	/>,
+	{kittyKeyboard: {mode: 'auto'}},
 );

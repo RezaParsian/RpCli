@@ -9,8 +9,8 @@ export default function openDeepSeek(): void {
 		process.platform === 'win32'
 			? 'cmd'
 			: process.platform === 'darwin'
-			? 'open'
-			: 'xdg-open';
+				? 'open'
+				: 'xdg-open';
 	const arguments_ =
 		process.platform === 'win32'
 			? ['/c', 'start', '', DEEPSEEK_URL]
