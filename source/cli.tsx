@@ -3,14 +3,10 @@ import React from 'react';
 import {render} from 'ink';
 import meow from 'meow';
 import dotenv from 'dotenv';
-import path from 'path';
-import {fileURLToPath} from 'url';
 import {tokenConfigPath} from './core/TokenConfig.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
 dotenv.config({
-	path: [tokenConfigPath, path.join(__dirname, '..', '.env')],
+	path: tokenConfigPath,
 	quiet: true,
 });
 
