@@ -1,5 +1,5 @@
 import React, {useCallback, useEffect, useRef, useState} from 'react';
-import {Box, Text, useInput} from 'ink';
+import {Box, Text} from 'ink';
 import type {Key} from 'ink';
 import RpCliLogo from './RpCliLogo.js';
 import Spinner from './Spinner.js';
@@ -143,17 +143,6 @@ export default function InteractiveChatView({
 		[loading, token, confirmTool, handleToolMessage, onInvalidToken],
 	);
 
-	useInput(
-		(typedInput, key) => {
-			// Terminals without enhanced keyboard reporting commonly encode
-			// Ctrl+Enter as LF, while Enter is encoded as CR.
-			if (typedInput === '\n' && !key.return) {
-				handleSubmit(input);
-			}
-		},
-		{isActive: !loading && !pending},
-	);
-
 	return (
 		<Box flexDirection="column">
 			<RpCliLogo version={version} />
@@ -210,8 +199,9 @@ export default function InteractiveChatView({
 								rows={3}
 								textStyle={{color: 'white'}}
 								keyBindings={{
-									submit: (key: Key) => key.return && key.ctrl,
-									newline: (key: Key) => key.return && !key.ctrl,
+									submit: (_input: string, key: Key) => key.return && key.ctrl,
+									newline: (_input: string, key: Key) =>
+										key.return && !key.ctrl,
 								}}
 							/>
 						</Box>
