@@ -55,4 +55,5 @@ render(
 		prompt={prompt}
 		version={cli.pkg.version}
 	/>,
+	{kittyKeyboard: {mode: 'auto'}},
 );
