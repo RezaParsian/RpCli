@@ -324,6 +324,6 @@ export function formatToolActivityMessage(
 ): string {
 	return assistantContent.replace(
 		/<tool_call>\s*[\s\S]*?\s*<\/tool_call>/,
-		`🔧 ${describeToolActivity(call)}`,
+		`⚙️  ${describeToolActivity(call)}`,
 	);
 }

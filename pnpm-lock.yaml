@@ -23,9 +23,6 @@ importers:
       ink-gradient:
         specifier: ^4.0.0
         version: 4.0.0(ink@7.0.1(@types/react@18.3.28)(react@19.2.5))
-      ink-multiline-input:
-        specifier: ^0.1.0
-        version: 0.1.0(ink@7.0.1(@types/react@18.3.28)(react@19.2.5))(react@19.2.5)
       ink-spinner:
         specifier: ^5.0.0
         version: 5.0.0(ink@7.0.1(@types/react@18.3.28)(react@19.2.5))(react@19.2.5)
@@ -44,6 +41,9 @@ importers:
       react:
         specifier: ^19.2.5
         version: 19.2.5
+      react-ink-textarea:
+        specifier: ^0.3.0
+        version: 0.3.0(ink@7.0.1(@types/react@18.3.28)(react@19.2.5))(react@19.2.5)
     devDependencies:
       '@sindresorhus/tsconfig':
         specifier: ^3.0.1
@@ -1292,12 +1292,6 @@ packages:
     peerDependencies:
       ink: '>=6'
 
-  ink-multiline-input@0.1.0:
-    resolution: {integrity: sha512-GmIF5YdaxmT5pHwI67yTDe5UDId20WeGJx39zwaYJ6SwMrlioRRMn+BxklsAUYsvA6BJfh2kpHNR1Kan69UTxw==}
-    peerDependencies:
-      ink: '>=6'
-      react: '>=19'
-
   ink-spinner@5.0.0:
     resolution: {integrity: sha512-EYEasbEjkqLGyPOUc8hBJZNuC5GvXGMLu0w5gdTNskPc7Izc5vO3tdQEYnzvshucyGCBXc86ig0ujXPMWaQCdA==}
     engines: {node: '>=14.16'}
@@ -2052,6 +2046,12 @@ packages:
   quick-lru@6.1.2:
     resolution: {integrity: sha512-AAFUA5O1d83pIHEhJwWCq/RQcRukCkn/NSm2QsTEMle5f2hP0ChI2+3Xb051PZCkLryI/Ir1MVKviT2FIloaTQ==}
     engines: {node: '>=12'}
+
+  react-ink-textarea@0.3.0:
+    resolution: {integrity: sha512-idB9FIuldfrzDXqduYv7B6Vpg314WXaeEP1LpJoXm5/R71UHLQlbMwpR7t/+ugExaTpz09SanK38N1s+H9fFwQ==}
+    peerDependencies:
+      ink: ^7.0.0
+      react: ^18.0.0 || ^19.0.0
 
   react-is@16.13.1:
     resolution: {integrity: sha512-24e6ynE2H+OKt4kqsOvNd8kBpV65zoxbA4BVsEOB3ARVWQki/DHzaUoC5KuON/BiccDaCCTZBuOcfZs70kR8bQ==}
@@ -4117,11 +4117,6 @@ snapshots:
       ink: 7.0.1(@types/react@18.3.28)(react@19.2.5)
       strip-ansi: 7.2.0
 
-  ink-multiline-input@0.1.0(ink@7.0.1(@types/react@18.3.28)(react@19.2.5))(react@19.2.5):
-    dependencies:
-      ink: 7.0.1(@types/react@18.3.28)(react@19.2.5)
-      react: 19.2.5
-
   ink-spinner@5.0.0(ink@7.0.1(@types/react@18.3.28)(react@19.2.5))(react@19.2.5):
     dependencies:
       cli-spinners: 2.9.2
@@ -4845,6 +4840,13 @@ snapshots:
   queue-microtask@1.2.3: {}
 
   quick-lru@6.1.2: {}
+
+  react-ink-textarea@0.3.0(ink@7.0.1(@types/react@18.3.28)(react@19.2.5))(react@19.2.5):
+    dependencies:
+      ansi-styles: 6.2.3
+      ink: 7.0.1(@types/react@18.3.28)(react@19.2.5)
+      react: 19.2.5
+      string-width: 8.2.1
 
   react-is@16.13.1: {}
 

@@ -7,7 +7,7 @@ import {CHAT_SYSTEM_PROMPT, getAIResponse} from '../actions/chat.js';
 import {ToolConfirmation, useToolConfirmation} from './ToolConfirmation.js';
 import deleteSession from '../core/DeleteSession.js';
 import {isInvalidTokenError} from '../core/InvalidTokenError.js';
-import {MultilineInput} from "ink-multiline-input";
+import {TextArea} from "react-ink-textarea";
 
 type Message = {
 	role: 'user' | 'assistant';
@@ -20,11 +20,7 @@ type Props = {
 	onInvalidToken: () => void;
 };
 
-export default function InteractiveChatView({
-												version,
-												token,
-												onInvalidToken,
-											}: Props) {
+export default function InteractiveChatView({version, token, onInvalidToken,}: Props) {
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [input, setInput] = useState('');
 	const [loading, setLoading] = useState(false);
@@ -185,20 +181,13 @@ export default function InteractiveChatView({
 								{'> '}
 							</Text>
 
-							{input === '' && (
-								<Text dimColor>Type your message... (Ctrl+Enter to submit)</Text>
-							)}
-
-							<MultilineInput
+							<TextArea
+								focus={true}
 								value={input}
 								onChange={setInput}
 								onSubmit={handleSubmit}
-								rows={3}
-								textStyle={{color: 'white'}}
-								keyBindings={{
-									submit: (key) => key.ctrl && key.return, // Ctrl+Enter to submit
-									newline: (key) => key.return, // Enter for newline (default)
-								}}
+								placeholder="Type your message... (Shift+Enter to submit)"
+								showInvisibles={{space: false, tab: true, newline: false}}
 							/>
 						</Box>
 					</Box>

@@ -46,13 +46,13 @@
 		"ink": "^7.0.1",
 		"ink-big-text": "^2.0.0",
 		"ink-gradient": "^4.0.0",
-		"ink-multiline-input": "^0.1.0",
 		"ink-spinner": "^5.0.0",
 		"ink-syntax-highlight": "^2.0.2",
 		"ink-text-input": "^6.0.0",
 		"marked": "^18.0.3",
 		"meow": "^14.1.0",
-		"react": "^19.2.5"
+		"react": "^19.2.5",
+		"react-ink-textarea": "^0.3.0"
 	},
 	"devDependencies": {
 		"@sindresorhus/tsconfig": "^3.0.1",
