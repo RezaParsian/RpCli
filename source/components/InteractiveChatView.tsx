@@ -187,8 +187,8 @@ export default function InteractiveChatView({
 
 							{input === '' && (
 								<Text dimColor>
-									Type your message... (Enter to submit, Alt+Enter for a new
-									line)
+									Type your message... (Enter for a new line, Ctrl+Enter to
+									submit)
 								</Text>
 							)}
 
@@ -199,8 +199,8 @@ export default function InteractiveChatView({
 								rows={3}
 								textStyle={{color: 'white'}}
 								keyBindings={{
-									submit: (key: Key) => key.return && !key.meta,
-									newline: (key: Key) => key.return && key.meta,
+									submit: (key: Key) => key.return && key.ctrl,
+									newline: (key: Key) => key.return && !key.ctrl,
 								}}
 							/>
 						</Box>
