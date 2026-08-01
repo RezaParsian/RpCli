@@ -1,5 +1,5 @@
 import React, {useCallback, useEffect, useRef, useState} from 'react';
-import {Box, Text} from 'ink';
+import {Box, Text, useInput} from 'ink';
 import type {Key} from 'ink';
 import RpCliLogo from './RpCliLogo.js';
 import Spinner from './Spinner.js';
@@ -141,6 +141,17 @@ export default function InteractiveChatView({
 			})();
 		},
 		[loading, token, confirmTool, handleToolMessage, onInvalidToken],
+	);
+
+	useInput(
+		(typedInput, key) => {
+			// Terminals without enhanced keyboard reporting commonly encode
+			// Ctrl+Enter as LF, while Enter is encoded as CR.
+			if (typedInput === '\n' && !key.return) {
+				handleSubmit(input);
+			}
+		},
+		{isActive: !loading && !pending},
 	);
 
 	return (
