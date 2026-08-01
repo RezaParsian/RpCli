@@ -7,6 +7,7 @@ import MarkdownText from './MarkdownText.js';
 import {CHAT_SYSTEM_PROMPT, getAIResponse} from '../actions/chat.js';
 import {ToolConfirmation, useToolConfirmation} from './ToolConfirmation.js';
 import deleteSession from '../core/DeleteSession.js';
+import {isInvalidTokenError} from '../core/InvalidTokenError.js';
 
 type Message = {
 	role: 'user' | 'assistant';
@@ -15,11 +16,15 @@ type Message = {
 
 type Props = {
 	version?: string;
+	token: string;
+	onInvalidToken: () => void;
 };
 
-const token = process.env['DEEPSEEK_TOKEN'];
-
-export default function InteractiveChatView({version}: Props) {
+export default function InteractiveChatView({
+	version,
+	token,
+	onInvalidToken,
+}: Props) {
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [input, setInput] = useState('');
 	const [loading, setLoading] = useState(false);
@@ -34,8 +39,6 @@ export default function InteractiveChatView({version}: Props) {
 		setMessages(previous => [...previous, {role: 'assistant', content}]);
 	}, []);
 
-	if (!token) throw new Error('No token provided');
-
 	const deleteUnusedSession = useCallback(() => {
 		if (
 			hasUserMessage.current ||
@@ -47,7 +50,7 @@ export default function InteractiveChatView({version}: Props) {
 
 		sessionDeleted.current = true;
 		void deleteSession(token, sessionId.current).catch(() => undefined);
-	}, []);
+	}, [token]);
 
 	useEffect(() => {
 		initialization.current = (async () => {
@@ -60,6 +63,10 @@ export default function InteractiveChatView({version}: Props) {
 					return;
 				}
 			} catch (error) {
+				if (isInvalidTokenError(error)) {
+					onInvalidToken();
+					return;
+				}
 				if (!unmounted.current) {
 					setMessages(previous => [
 						...previous,
@@ -78,7 +85,7 @@ export default function InteractiveChatView({version}: Props) {
 			unmounted.current = true;
 			deleteUnusedSession();
 		};
-	}, [deleteUnusedSession]);
+	}, [deleteUnusedSession, onInvalidToken, token]);
 
 	const handleSubmit = useCallback(
 		(value: string) => {
@@ -114,6 +121,10 @@ export default function InteractiveChatView({version}: Props) {
 						},
 					]);
 				} catch (err) {
+					if (isInvalidTokenError(err)) {
+						onInvalidToken();
+						return;
+					}
 					setMessages(prev => [
 						...prev,
 						{
@@ -128,7 +139,7 @@ export default function InteractiveChatView({version}: Props) {
 				}
 			})();
 		},
-		[messages, loading, confirmTool, handleToolMessage],
+		[loading, token, confirmTool, handleToolMessage, onInvalidToken],
 	);
 
 	return (

@@ -1,7 +1,12 @@
 import React, {useEffect, useState} from 'react';
 import {Box, Text, useApp, useInput} from 'ink';
 import Spinner from './Spinner.js';
-import {executeCommit, generateCommitMessage, getGitDiff,} from '../actions/commitMessage.js';
+import {
+	executeCommit,
+	generateCommitMessage,
+	getGitDiff,
+} from '../actions/commitMessage.js';
+import {isInvalidTokenError} from '../core/InvalidTokenError.js';
 
 type State =
 	| 'init'
@@ -15,9 +20,11 @@ type State =
 
 type Props = {
 	useAll: boolean;
+	token: string;
+	onInvalidToken: () => void;
 };
 
-export default function CommitView({useAll}: Props) {
+export default function CommitView({useAll, token, onInvalidToken}: Props) {
 	const {exit} = useApp();
 	const [state, setState] = useState<State>('init');
 	const [commitMessage, setCommitMessage] = useState('');
@@ -42,15 +49,19 @@ export default function CommitView({useAll}: Props) {
 
 		void (async () => {
 			try {
-				const message = await generateCommitMessage(diff);
+				const message = await generateCommitMessage(diff, token);
 				setCommitMessage(message);
 				setState('review');
 			} catch (err) {
+				if (isInvalidTokenError(err)) {
+					onInvalidToken();
+					return;
+				}
 				setError(err instanceof Error ? err.message : String(err));
 				setState('error');
 			}
 		})();
-	}, [useAll]);
+	}, [useAll, token, onInvalidToken]);
 
 	useEffect(() => {
 		if (state !== 'committing') return;
@@ -73,8 +84,7 @@ export default function CommitView({useAll}: Props) {
 		)
 			return;
 
-		const delay =
-			state === 'success' ? 1000 : state === 'cancelled' ? 0 : 2000;
+		const delay = state === 'success' ? 1000 : state === 'cancelled' ? 0 : 2000;
 		const timer = setTimeout(() => exit(), delay);
 		return () => clearTimeout(timer);
 	}, [state, exit]);
@@ -91,7 +101,7 @@ export default function CommitView({useAll}: Props) {
 	);
 
 	if (state === 'init' || state === 'generating') {
-		return <Spinner text="Generating commit message..."/>;
+		return <Spinner text="Generating commit message..." />;
 	}
 
 	if (state === 'review') {
@@ -112,7 +122,7 @@ export default function CommitView({useAll}: Props) {
 	}
 
 	if (state === 'committing') {
-		return <Spinner text="Committing changes..."/>;
+		return <Spinner text="Committing changes..." />;
 	}
 
 	if (state === 'success') {
@@ -136,7 +146,9 @@ export default function CommitView({useAll}: Props) {
 				</Text>
 				{!useAll && (
 					<Text color="yellow">
-						{'Tip: Stage your changes first using `git add .` or `git add <file>`'}
+						{
+							'Tip: Stage your changes first using `git add .` or `git add <file>`'
+						}
 					</Text>
 				)}
 			</Box>

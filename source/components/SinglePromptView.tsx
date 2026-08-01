@@ -5,16 +5,21 @@ import MarkdownText from './MarkdownText.js';
 import {CHAT_SYSTEM_PROMPT, getAIResponse} from '../actions/chat.js';
 import deleteSession from '../core/DeleteSession.js';
 import {ToolConfirmation, useToolConfirmation} from './ToolConfirmation.js';
+import {isInvalidTokenError} from '../core/InvalidTokenError.js';
 
 type State = 'loading' | 'done' | 'error';
 
 type Props = {
 	prompt: string;
+	token: string;
+	onInvalidToken: () => void;
 };
 
-const token = process.env['DEEPSEEK_TOKEN'];
-
-export default function SinglePromptView({prompt}: Props) {
+export default function SinglePromptView({
+	prompt,
+	token,
+	onInvalidToken,
+}: Props) {
 	const {exit} = useApp();
 	const [state, setState] = useState<State>('loading');
 	const [response, setResponse] = useState('');
@@ -24,8 +29,6 @@ export default function SinglePromptView({prompt}: Props) {
 	const handleToolMessage = useCallback((content: string) => {
 		setToolMessages(previous => [...previous, content]);
 	}, []);
-
-	if (!token) throw new Error('No token provided');
 
 	useEffect(() => {
 		void (async () => {
@@ -44,12 +47,16 @@ export default function SinglePromptView({prompt}: Props) {
 				setResponse(fullResponse.content ?? 'Ai Error!');
 				setState('done');
 			} catch (err) {
+				if (isInvalidTokenError(err)) {
+					onInvalidToken();
+					return;
+				}
 				console.log({err});
 				setError(err instanceof Error ? err.message : String(err));
 				setState('error');
 			}
 		})();
-	}, [prompt, confirmTool, handleToolMessage]);
+	}, [prompt, token, confirmTool, handleToolMessage, onInvalidToken]);
 
 	useEffect(() => {
 		if (state !== 'done' && state !== 'error') return;

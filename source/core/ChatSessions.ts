@@ -24,7 +24,10 @@ async function chatSessions(token: string): Promise<ChatSession[]> {
 		}
 	);
 
-	return (await response.json()).data.biz_data.chat_sessions;
+	const payload = await response.json();
+	assertValidTokenResponse(response, payload);
+	return payload.data.biz_data.chat_sessions;
 }
 
 export default chatSessions;
+import {assertValidTokenResponse} from './InvalidTokenError.js';

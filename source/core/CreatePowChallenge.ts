@@ -17,7 +17,10 @@ async function createPowChallenge(token: string): Promise<PowChallenge> {
 		}
 	);
 
-	return (await response.json()).data.biz_data.challenge;
+	const payload = await response.json();
+	assertValidTokenResponse(response, payload);
+	return payload.data.biz_data.challenge;
 }
 
 export default createPowChallenge;
+import {assertValidTokenResponse} from './InvalidTokenError.js';
