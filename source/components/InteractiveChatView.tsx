@@ -1,5 +1,5 @@
 import React, {useCallback, useEffect, useRef, useState} from 'react';
-import {Box, Text} from 'ink';
+import {Box, Text, useInput} from 'ink';
 import type {Key} from 'ink';
 import RpCliLogo from './RpCliLogo.js';
 import Spinner from './Spinner.js';
@@ -143,6 +143,15 @@ export default function InteractiveChatView({
 		[loading, token, confirmTool, handleToolMessage, onInvalidToken],
 	);
 
+	useInput(
+		(typedInput, key) => {
+			if (key.ctrl && typedInput === 's') {
+				handleSubmit(input);
+			}
+		},
+		{isActive: !loading && !pending},
+	);
+
 	return (
 		<Box flexDirection="column">
 			<RpCliLogo version={version} />
@@ -187,7 +196,7 @@ export default function InteractiveChatView({
 
 							{input === '' && (
 								<Text dimColor>
-									Type your message... (Enter for a new line, Ctrl+Enter to
+									Type your message... (Enter: new line, Ctrl+Enter or Ctrl+S:
 									submit)
 								</Text>
 							)}
