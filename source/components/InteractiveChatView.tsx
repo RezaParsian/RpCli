@@ -1,9 +1,9 @@
 import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {Box, Text} from 'ink';
-import TextInput from 'ink-text-input';
 import RpCliLogo from './RpCliLogo.js';
 import Spinner from './Spinner.js';
 import MarkdownText from './MarkdownText.js';
+import MultiLineInput from './MultiLineInput.js';
 import {CHAT_SYSTEM_PROMPT, getAIResponse} from '../actions/chat.js';
 import {ToolConfirmation, useToolConfirmation} from './ToolConfirmation.js';
 import deleteSession from '../core/DeleteSession.js';
@@ -172,22 +172,27 @@ export default function InteractiveChatView({
 				) : loading ? (
 					<Spinner text="Thinking..." />
 				) : (
-					<Box
-						borderStyle="single"
-						borderLeft={false}
-						borderRight={false}
-						borderColor="cyan"
-					>
-						<Text color="magenta" bold>
-							{'> '}
+					<>
+						<Box
+							borderStyle="single"
+							borderLeft={false}
+							borderRight={false}
+							borderColor="cyan"
+						>
+							<Text color="magenta" bold>
+								{'> '}
+							</Text>
+							<MultiLineInput
+								value={input}
+								onChange={setInput}
+								onSubmit={handleSubmit}
+								placeholder="Type your message..."
+							/>
+						</Box>
+						<Text dimColor>
+							Enter to send · Ctrl+J or Shift+Enter for a new line
 						</Text>
-						<TextInput
-							value={input}
-							onChange={setInput}
-							onSubmit={handleSubmit}
-							placeholder="Type your message..."
-						/>
-					</Box>
+					</>
 				)}
 			</Box>
 		</Box>
