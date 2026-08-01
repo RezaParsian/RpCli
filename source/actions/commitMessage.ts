@@ -1,8 +1,6 @@
 import {execSync} from 'child_process';
-import {getAIResponse} from "./chat.js";
-import deleteSession from "../core/DeleteSession.js";
-
-const token = process.env["DEEPSEEK_TOKEN"];
+import {getAIResponse} from './chat.js';
+import deleteSession from '../core/DeleteSession.js';
 
 const CHAT_SYSTEM_PROMPT = `You are a senior engineer specialized in writing perfect Conventional Commit messages.
 
@@ -27,14 +25,16 @@ export function getGitDiff(useAll: boolean): string {
 
 export async function generateCommitMessage(
 	diff: string,
+	token: string,
 ): Promise<string> {
-	if (!token) throw new Error('no token provided');
+	await getAIResponse(token, CHAT_SYSTEM_PROMPT);
 
-	await getAIResponse(token, CHAT_SYSTEM_PROMPT)
+	const response = await getAIResponse(
+		token,
+		`Here is the git diff:\n\n${diff}`,
+	);
 
-	const response = await getAIResponse(token, `Here is the git diff:\n\n${diff}`)
-
-	await deleteSession(token, response.sessionId)
+	await deleteSession(token, response.sessionId);
 
 	return (response?.content || 'Ai Error!')?.trim();
 }

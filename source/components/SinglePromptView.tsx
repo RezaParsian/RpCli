@@ -10,11 +10,10 @@ type State = 'loading' | 'done' | 'error';
 
 type Props = {
 	prompt: string;
+	token: string;
 };
 
-const token = process.env['DEEPSEEK_TOKEN'];
-
-export default function SinglePromptView({prompt}: Props) {
+export default function SinglePromptView({prompt, token}: Props) {
 	const {exit} = useApp();
 	const [state, setState] = useState<State>('loading');
 	const [response, setResponse] = useState('');
@@ -24,8 +23,6 @@ export default function SinglePromptView({prompt}: Props) {
 	const handleToolMessage = useCallback((content: string) => {
 		setToolMessages(previous => [...previous, content]);
 	}, []);
-
-	if (!token) throw new Error('No token provided');
 
 	useEffect(() => {
 		void (async () => {
@@ -49,7 +46,7 @@ export default function SinglePromptView({prompt}: Props) {
 				setState('error');
 			}
 		})();
-	}, [prompt, confirmTool, handleToolMessage]);
+	}, [prompt, token, confirmTool, handleToolMessage]);
 
 	useEffect(() => {
 		if (state !== 'done' && state !== 'error') return;

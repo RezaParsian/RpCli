@@ -15,11 +15,10 @@ type Message = {
 
 type Props = {
 	version?: string;
+	token: string;
 };
 
-const token = process.env['DEEPSEEK_TOKEN'];
-
-export default function InteractiveChatView({version}: Props) {
+export default function InteractiveChatView({version, token}: Props) {
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [input, setInput] = useState('');
 	const [loading, setLoading] = useState(false);
@@ -34,8 +33,6 @@ export default function InteractiveChatView({version}: Props) {
 		setMessages(previous => [...previous, {role: 'assistant', content}]);
 	}, []);
 
-	if (!token) throw new Error('No token provided');
-
 	const deleteUnusedSession = useCallback(() => {
 		if (
 			hasUserMessage.current ||
@@ -47,7 +44,7 @@ export default function InteractiveChatView({version}: Props) {
 
 		sessionDeleted.current = true;
 		void deleteSession(token, sessionId.current).catch(() => undefined);
-	}, []);
+	}, [token]);
 
 	useEffect(() => {
 		initialization.current = (async () => {

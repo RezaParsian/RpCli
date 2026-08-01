@@ -3,6 +3,7 @@ import {Box, Text} from 'ink';
 import CommitView from './components/CommitView.js';
 import SinglePromptView from './components/SinglePromptView.js';
 import InteractiveChatView from './components/InteractiveChatView.js';
+import TokenSetupView from './components/TokenSetupView.js';
 
 type Mode = 'interactive' | 'prompt' | 'commit';
 
@@ -24,11 +25,22 @@ function Header() {
 }
 
 export default function App({mode, commitAll, prompt, version}: Props) {
+	const token = process.env['DEEPSEEK_TOKEN'];
+
+	if (!token) {
+		return (
+			<Box flexDirection="column" marginX={1} marginY={1}>
+				<Header />
+				<TokenSetupView />
+			</Box>
+		);
+	}
+
 	if (mode === 'commit') {
 		return (
 			<Box flexDirection="column" marginX={1} marginY={1}>
 				<Header />
-				<CommitView useAll={commitAll} />
+				<CommitView useAll={commitAll} token={token} />
 			</Box>
 		);
 	}
@@ -37,10 +49,10 @@ export default function App({mode, commitAll, prompt, version}: Props) {
 		return (
 			<Box flexDirection="column" marginX={1} marginY={1}>
 				<Header />
-				<SinglePromptView prompt={prompt} />
+				<SinglePromptView prompt={prompt} token={token} />
 			</Box>
 		);
 	}
 
-	return <InteractiveChatView version={version} />;
+	return <InteractiveChatView version={version} token={token} />;
 }
