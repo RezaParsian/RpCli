@@ -5,13 +5,25 @@ import meow from 'meow';
 import dotenv from 'dotenv';
 import path from 'path';
 import {fileURLToPath} from 'url';
+import os from 'node:os';
+import configureToken from './core/ConfigureToken.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const userEnvironmentPath = path.join(
+	os.homedir(),
+	'.config',
+	'rp-cli',
+	'.env',
+);
 
 dotenv.config({
-	path: path.join(__dirname,'..', '.env'),
+	path: [path.join(__dirname, '..', '.env'), userEnvironmentPath],
 	quiet: true,
 });
+
+if (!process.env['DEEPSEEK_TOKEN']) {
+	await configureToken(userEnvironmentPath);
+}
 
 const {default: App} = await import('./app.js');
 
@@ -22,7 +34,6 @@ const cli = meow(
 	  $ rp-cli <prompt>                  Send a single prompt
 	  $ rp-cli -c / --commit-message     Generate commit message from staged changes
 	  $ rp-cli -c -a                     Use git diff HEAD instead of --staged
-	  $ rp-cli --models                  Show available models
 
 	Options
 	  --commit-message, -c  Generate commit message from staged changes
@@ -38,29 +49,23 @@ const cli = meow(
 	{
 		importMeta: import.meta,
 		flags: {
-			models: {type: 'boolean', shortFlag: 'm'},
 			commitMessage: {type: 'boolean', shortFlag: 'c'},
 			commitAll: {type: 'boolean', shortFlag: 'a'},
-			model: {type: 'number'},
 		},
 	},
 );
 
-const selectedModel = 'DeepSeek';
 const prompt = cli.input.join(' ').trim();
 
-const mode = cli.flags.models
-	? 'models'
-	: cli.flags.commitMessage
-		? 'commit'
-		: prompt
-			? 'prompt'
-			: 'interactive';
+const mode = cli.flags.commitMessage
+	? 'commit'
+	: prompt
+	? 'prompt'
+	: 'interactive';
 
 render(
 	<App
 		mode={mode}
-		selectedModel={selectedModel}
 		commitAll={cli.flags.commitAll ?? false}
 		prompt={prompt}
 		version={cli.pkg.version}
