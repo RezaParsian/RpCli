@@ -10,7 +10,7 @@ import {isInvalidTokenError} from '../core/InvalidTokenError.js';
 import {TextArea} from "react-ink-textarea";
 
 type Message = {
-	role: 'user' | 'assistant';
+	role: 'user' | 'assistant' | 'console';
 	content: string;
 };
 
@@ -31,8 +31,9 @@ export default function InteractiveChatView({version, token, onInvalidToken,}: P
 	const unmounted = useRef(false);
 	const sessionDeleted = useRef(false);
 	const {pending, confirmTool} = useToolConfirmation();
+
 	const handleToolMessage = useCallback((content: string) => {
-		setMessages(previous => [...previous, {role: 'assistant', content}]);
+		setMessages(previous => [...previous, {role: 'console', content}]);
 	}, []);
 
 	const deleteUnusedSession = useCallback(() => {
@@ -85,7 +86,6 @@ export default function InteractiveChatView({version, token, onInvalidToken,}: P
 
 	const handleSubmit = useCallback(
 		(value: string) => {
-			console.log(value)
 			if (!value.trim() || loading) return;
 			hasUserMessage.current = true;
 
@@ -146,21 +146,24 @@ export default function InteractiveChatView({version, token, onInvalidToken,}: P
 			<Box flexDirection="column" marginX={1}>
 				{messages.map((msg, i) => (
 					<Box key={i} flexDirection="column" marginBottom={1}>
-						{msg.role === 'user' ? (
-							<Box>
-								<Text color="magenta" bold>
-									{'> '}
-									{msg.content}
-								</Text>
-							</Box>
-						) : (
-							<Box>
-								<Text color="magenta" bold>
-									✦{' '}
-								</Text>
-								<MarkdownText text={msg.content}/>
-							</Box>
-						)}
+						{msg.role === 'user' && <Box>
+							<Text color="magenta" bold>
+								{'> '}
+								{msg.content}
+							</Text>
+						</Box>}
+
+						{msg.role === 'assistant' && <Box>
+							<Text color="magenta" bold>
+								✦{' '}
+							</Text>
+
+							<MarkdownText text={msg.content}/>
+						</Box>}
+
+						{msg.role === 'console' && <Box>
+							<MarkdownText text={msg.content}/>
+						</Box>}
 					</Box>
 				))}
 
