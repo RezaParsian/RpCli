@@ -186,7 +186,7 @@ export default function InteractiveChatView({version, token, onInvalidToken,}: P
 								value={input}
 								onChange={setInput}
 								onSubmit={handleSubmit}
-								placeholder="Type your message... (Shift+Enter to submit)"
+								placeholder="Type your message... (Shift+Enter | Alt+Enter | Ctrl+J for newline)"
 								showInvisibles={{space: false, tab: true, newline: false}}
 							/>
 						</Box>

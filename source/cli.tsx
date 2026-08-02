@@ -15,10 +15,10 @@ const {default: App} = await import('./app.js');
 const cli = meow(
 	`
 	Usage
-	  $ rp-cli                           Open interactive chat
-	  $ rp-cli <prompt>                  Send a single prompt
-	  $ rp-cli -c / --commit-message     Generate commit message from staged changes
-	  $ rp-cli -c -a                     Use git diff HEAD instead of --staged
+	  $ rc                           Open interactive chat
+	  $ rc <prompt>                  Send a single prompt
+	  $ rc -c / --commit-message     Generate commit message from staged changes
+	  $ rc -c -a                     Use git diff HEAD instead of --staged
 
 	Options
 	  --commit-message, -c  Generate commit message from staged changes
@@ -26,10 +26,10 @@ const cli = meow(
 	  --version             Show version
 
 	Examples
-	  $ rp-cli
-	  $ rp-cli "explain bubble sort in 2 sentences"
-	  $ rp-cli -c
-	  $ rp-cli -c -a
+	  $ rc
+	  $ rc "explain bubble sort in 2 sentences"
+	  $ rc -c
+	  $ rc -c -a
 `,
 	{
 		importMeta: import.meta,
@@ -55,5 +55,5 @@ render(
 		prompt={prompt}
 		version={cli.pkg.version}
 	/>,
-	{kittyKeyboard: {mode: 'auto'}},
+	{kittyKeyboard: {mode: 'enabled'}},
 );

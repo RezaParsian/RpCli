@@ -29,7 +29,7 @@ export default function RpCliLogo({version}: Props) {
 					paddingX={1}
 				>
 					<Text>
-						{'>'}_ rp-cli (<Text color="gray">{version ?? '0.0.0'}</Text>)
+						{'>'}_ rc (<Text color="gray">{version ?? '0.0.0'}</Text>)
 					</Text>
 
 					<Text>
