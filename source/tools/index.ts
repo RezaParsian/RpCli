@@ -8,6 +8,13 @@ export type ToolCall = {
 	arguments: Record<string, unknown>;
 };
 
+export type ToolResult = {
+	ok: boolean;
+	tool_name: string;
+	error?: string;
+	result?: string;
+};
+
 type Tool = {
 	name: string;
 	description: string;
@@ -238,10 +245,12 @@ const x = 2;
 </param>
 </tool_call>
 
+You may include MULTIPLE <tool_call> blocks in a single response, one after another, when the calls are independent of each other (e.g. reading several unrelated files, or editing several unrelated files). Do NOT batch calls where a later call depends on the result of an earlier one (e.g. reading a file to decide what to write) — in that case, call only the first tool and wait for its result before deciding the next step.
+
 Available tools:
 ${tools.map((tool, index) => `${index + 1}. ${tool.description}`).join('\n')}
 
-Use only one tool per response. Tool results will be sent back to you. If no tool is needed, answer directly without a <tool_call> tag.`;
+Tool results will be sent back to you in the same order the calls were made. If no tool is needed, answer directly without any <tool_call> tag.`;
 
 function stripOuterNewline(value: string): string {
 	let result = value;
@@ -254,14 +263,7 @@ function stripOuterNewline(value: string): string {
 	return result;
 }
 
-export function parseToolCall(content: string): ToolCall | undefined {
-	const callMatch =
-		/<tool_call\s+name="([^"]+)">\s*([\s\S]*?)\s*<\/tool_call>/.exec(content);
-	if (!callMatch) return undefined;
-
-	const [, name, body] = callMatch;
-	if (!name || body === undefined) return undefined;
-
+function parseParams(body: string): Record<string, unknown> {
 	const arguments_: Record<string, unknown> = {};
 	const paramPattern = /<param\s+name="([^"]+)">([\s\S]*?)<\/param>/g;
 	let paramMatch: RegExpExecArray | null;
@@ -272,29 +274,129 @@ export function parseToolCall(content: string): ToolCall | undefined {
 		arguments_[paramName] = stripOuterNewline(rawValue ?? '');
 	}
 
-	if (Object.keys(arguments_).length === 0) {
-		throw new TypeError(
-			'Invalid tool call. Expected at least one <param name="...">value</param> tag.',
-		);
-	}
-
-	return {name, arguments: arguments_};
+	return arguments_;
 }
 
-export async function executeTool(call: ToolCall): Promise<string> {
+/**
+ * Parses the first <tool_call> block found in the content, if any.
+ * Kept for backwards compatibility with single-call call sites.
+ */
+export function parseToolCall(content: string): ToolCall | undefined {
+	const calls = parseToolCalls(content);
+	return calls[0];
+}
+
+/**
+ * Parses every <tool_call> block found in the content, in the order they appear.
+ * A response with no tool_call blocks returns an empty array.
+ * A tool_call block with no <param> tags throws, since that indicates malformed model output.
+ */
+export function parseToolCalls(content: string): ToolCall[] {
+	const calls: ToolCall[] = [];
+	const callPattern = /<tool_call\s+name="([^"]+)">\s*([\s\S]*?)\s*<\/tool_call>/g;
+	let callMatch: RegExpExecArray | null;
+
+	while ((callMatch = callPattern.exec(content)) !== null) {
+		const [, name, body] = callMatch;
+		if (!name || body === undefined) continue;
+
+		const arguments_ = parseParams(body);
+		if (Object.keys(arguments_).length === 0) {
+			throw new TypeError(
+				`Invalid tool call "${name}". Expected at least one <param name="...">value</param> tag.`,
+			);
+		}
+
+		calls.push({name, arguments: arguments_});
+	}
+
+	return calls;
+}
+
+function formatToolOutput(value: unknown): string {
+	if (typeof value === 'string') return value;
+
+	if (Array.isArray(value)) return value.join('\n');
+
+	if (value && typeof value === 'object' && ('stdout' in value || 'stderr' in value)) {
+		const {stdout, stderr} = value as {stdout?: string; stderr?: string};
+		const parts: string[] = [];
+		if (stdout?.trim()) parts.push(stdout.trimEnd());
+		if (stderr?.trim()) parts.push(`stderr:\n${stderr.trimEnd()}`);
+		return parts.length > 0 ? parts.join('\n\n') : '(no output)';
+	}
+
+	return JSON.stringify(value, null, 2);
+}
+
+export async function executeTool(call: ToolCall): Promise<ToolResult> {
 	const tool = tools.find(candidate => candidate.name === call.name);
-	if (!tool)
-		return JSON.stringify({ok: false, error: `Unknown tool: ${call.name}`});
+
+	if (!tool) return {ok: false, tool_name: call.name, error: 'Unknown tool'};
 
 	try {
 		const result = await tool.execute(call.arguments);
-		return JSON.stringify({ok: true, result});
+		return {ok: true, tool_name: call.name, result: formatToolOutput(result)};
 	} catch (error) {
-		return JSON.stringify({
+		return {
 			ok: false,
+			tool_name: call.name,
 			error: error instanceof Error ? error.message : String(error),
-		});
+		};
 	}
+}
+
+/**
+ * Callback invoked before executing a tool call that requires confirmation.
+ * Return true to proceed, false to decline (which cancels this call and
+ * every call still queued after it in the same batch).
+ */
+export type ConfirmationHandler = (call: ToolCall) => Promise<boolean>;
+
+/**
+ * Executes a batch of tool calls sequentially, in the order they were parsed.
+ * - Stops (does not execute) the batch as soon as a declined confirmation is hit.
+ * - Individual tool failures do NOT stop the batch; they're recorded as ok: false
+ *   in that call's result and execution continues with the next call, so the model
+ *   sees every outcome and can decide how to proceed.
+ * - Calls skipped because of a declined confirmation are recorded as
+ *   ok: false with a "Skipped" error, so the model always gets one ToolResult
+ *   per ToolCall it made.
+ */
+export async function executeToolCalls(
+	calls: ToolCall[],
+	onConfirm: ConfirmationHandler,
+): Promise<ToolResult[]> {
+	const results: ToolResult[] = [];
+	let declined = false;
+
+	for (const call of calls) {
+		if (declined) {
+			results.push({
+				ok: false,
+				tool_name: call.name,
+				error: 'Skipped: a previous tool call in this batch was declined.',
+			});
+			continue;
+		}
+
+		if (toolRequiresConfirmation(call.name)) {
+			const confirmed = await onConfirm(call);
+			if (!confirmed) {
+				declined = true;
+				results.push({
+					ok: false,
+					tool_name: call.name,
+					error: 'User declined this action.',
+				});
+				continue;
+			}
+		}
+
+		results.push(await executeTool(call));
+	}
+
+	return results;
 }
 
 export function toolRequiresConfirmation(name: string): boolean {
@@ -342,12 +444,22 @@ export function describeToolActivity(call: ToolCall): string {
 	}
 }
 
+/**
+ * Replaces every <tool_call> block in the assistant's raw content with a short
+ * one-line activity description, in order. Useful for rendering a live "doing X, then Y..."
+ * status instead of showing the raw tags while a batch executes.
+ */
 export function formatToolActivityMessage(
 	assistantContent: string,
-	call: ToolCall,
+	calls: ToolCall[],
 ): string {
+	let index = 0;
 	return assistantContent.replace(
-		/<tool_call\s+name="[^"]+">[\s\S]*?<\/tool_call>/,
-		`✾  ${describeToolActivity(call)}`,
+		/<tool_call\s+name="[^"]+">[\s\S]*?<\/tool_call>/g,
+		() => {
+			const call = calls[index];
+			index += 1;
+			return call ? `✾  ${describeToolActivity(call)}` : '';
+		},
 	);
 }

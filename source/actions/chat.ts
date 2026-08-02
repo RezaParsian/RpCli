@@ -1,12 +1,12 @@
 import sendMessage from '../core/SendMessage.js';
 import {ChatResult} from '../core/Chat.js';
 import {
-	executeTool,
+	executeToolCalls,
 	formatToolActivityMessage,
-	parseToolCall,
+	parseToolCalls,
 	TOOL_SYSTEM_PROMPT,
-	toolRequiresConfirmation,
 	type ToolCall,
+	type ToolResult,
 } from '../tools/index.js';
 
 export const CHAT_SYSTEM_PROMPT = `You are RP-CLI, an advanced and powerful AI assistant built to help developers with high-quality responses.
@@ -27,6 +27,17 @@ Now, respond to the user's request with excellence.
 
 ${TOOL_SYSTEM_PROMPT}`;
 
+function formatResultsMessage(results: ToolResult[]): string {
+	const blocks = results
+		.map(result => {
+			const body = result.ok ? result.result ?? '' : `Error: ${result.error}`;
+			return `<tool_result name="${result.tool_name}" ok="${result.ok}">\n${body}\n</tool_result>`;
+		})
+		.join('\n');
+
+	return `${blocks}\nUse these results to continue answering the user's request.`;
+}
+
 export async function getAIResponse(
 	token: string,
 	messages: string,
@@ -36,9 +47,10 @@ export async function getAIResponse(
 	let response = await sendMessage(token, messages);
 
 	while (true) {
-		let toolCall;
+		let toolCalls: ToolCall[];
+
 		try {
-			toolCall = parseToolCall(response.content ?? '');
+			toolCalls = parseToolCalls(response.content ?? '');
 		} catch (error) {
 			response = await sendMessage(
 				token,
@@ -49,27 +61,16 @@ export async function getAIResponse(
 			continue;
 		}
 
-		if (!toolCall) return response;
+		if (toolCalls.length === 0) return response;
+
 		onToolMessage?.(
-			formatToolActivityMessage(response.content ?? '', toolCall),
+			formatToolActivityMessage(response.content ?? '', toolCalls),
 		);
 
-		const runTool = async () => {
-			return executeTool(toolCall);
-		};
-
-		let result: string;
-		if (toolRequiresConfirmation(toolCall.name)) {
-			const approved = confirmTool ? await confirmTool(toolCall) : false;
-			result = approved
-				? await runTool()
-				: JSON.stringify({ok: false, error: 'User denied this tool call.'});
-		} else {
-			result = await runTool();
-		}
-		response = await sendMessage(
-			token,
-			`<tool_result name="${toolCall.name}">\n${result}\n</tool_result>\nUse this result to continue answering the user's request.`,
+		const results = await executeToolCalls(toolCalls, async call =>
+			confirmTool ? confirmTool(call) : false,
 		);
+
+		response = await sendMessage(token, formatResultsMessage(results));
 	}
 }
