@@ -141,8 +141,8 @@ const tools: Tool[] = [
 			await fs.writeFile(
 				filePath,
 				content.slice(0, firstIndex) +
-					newText +
-					content.slice(firstIndex + oldText.length),
+				newText +
+				content.slice(firstIndex + oldText.length),
 				'utf8',
 			);
 			return 'File edited successfully.';
@@ -220,10 +220,22 @@ const tools: Tool[] = [
 	},
 ];
 
-export const TOOL_SYSTEM_PROMPT = `You have access to the tools below. When a tool is needed, respond using exactly this format and no Markdown code fence:
+export const TOOL_SYSTEM_PROMPT = `You have access to the tools below. When a tool is needed, respond using exactly this format:
 
-<tool_call>
-{"name":"tool_name","arguments":{"parameter":"value"}}
+<tool_call name="tool_name">
+<param name="param_name">value</param>
+</tool_call>
+
+For multi-line values (like file content or code), put the value on its own lines between the tags — do NOT escape quotes, backslashes, or newlines:
+
+<tool_call name="edit_file">
+<param name="path">src/example.tsx</param>
+<param name="old_text">
+const x = 1;
+</param>
+<param name="new_text">
+const x = 2;
+</param>
 </tool_call>
 
 Available tools:
@@ -231,30 +243,42 @@ ${tools.map((tool, index) => `${index + 1}. ${tool.description}`).join('\n')}
 
 Use only one tool per response. Tool results will be sent back to you. If no tool is needed, answer directly without a <tool_call> tag.`;
 
-export function parseToolCall(content: string): ToolCall | undefined {
-	const match = /<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/.exec(content);
-	if (!match?.[1]) return undefined;
+function stripOuterNewline(value: string): string {
+	let result = value;
+	if (result.startsWith('\r\n')) result = result.slice(2);
+	else if (result.startsWith('\n')) result = result.slice(1);
 
-	const parsed: unknown = JSON.parse(match[1]);
-	if (
-		typeof parsed !== 'object' ||
-		parsed === null ||
-		!('name' in parsed) ||
-		typeof parsed.name !== 'string' ||
-		!('arguments' in parsed) ||
-		typeof parsed.arguments !== 'object' ||
-		parsed.arguments === null ||
-		Array.isArray(parsed.arguments)
-	) {
+	if (result.endsWith('\r\n')) result = result.slice(0, -2);
+	else if (result.endsWith('\n')) result = result.slice(0, -1);
+
+	return result;
+}
+
+export function parseToolCall(content: string): ToolCall | undefined {
+	const callMatch =
+		/<tool_call\s+name="([^"]+)">\s*([\s\S]*?)\s*<\/tool_call>/.exec(content);
+	if (!callMatch) return undefined;
+
+	const [, name, body] = callMatch;
+	if (!name || body === undefined) return undefined;
+
+	const arguments_: Record<string, unknown> = {};
+	const paramPattern = /<param\s+name="([^"]+)">([\s\S]*?)<\/param>/g;
+	let paramMatch: RegExpExecArray | null;
+
+	while ((paramMatch = paramPattern.exec(body)) !== null) {
+		const [, paramName, rawValue] = paramMatch;
+		if (!paramName) continue;
+		arguments_[paramName] = stripOuterNewline(rawValue ?? '');
+	}
+
+	if (Object.keys(arguments_).length === 0) {
 		throw new TypeError(
-			'Invalid tool call. Expected a name and an arguments object.',
+			'Invalid tool call. Expected at least one <param name="...">value</param> tag.',
 		);
 	}
 
-	return {
-		name: parsed.name,
-		arguments: parsed.arguments as Record<string, unknown>,
-	};
+	return {name, arguments: arguments_};
 }
 
 export async function executeTool(call: ToolCall): Promise<string> {
@@ -323,7 +347,7 @@ export function formatToolActivityMessage(
 	call: ToolCall,
 ): string {
 	return assistantContent.replace(
-		/<tool_call>\s*[\s\S]*?\s*<\/tool_call>/,
+		/<tool_call\s+name="[^"]+">[\s\S]*?<\/tool_call>/,
 		`✾  ${describeToolActivity(call)}`,
 	);
 }
