@@ -11,6 +11,7 @@ import {TextArea} from 'react-ink-textarea';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import FzfFilePicker, {createMentionEntries} from './FzfFilePicker.js';
+import listWorkspaceFiles from '../core/ListWorkspaceFiles.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -169,18 +170,23 @@ export default function InteractiveChatView({
 	}, []);
 
 	useEffect(() => {
-		void execFileAsync('git', [
-			'ls-files',
-			'--cached',
-			'--others',
-			'--exclude-standard',
-		])
-			.then(({stdout}) => {
-				setMentionEntries(
-					createMentionEntries(stdout.split('\n').filter(Boolean)),
-				);
-			})
-			.catch(() => setMentionEntries([]));
+		void (async () => {
+			let files: string[];
+
+			try {
+				const {stdout} = await execFileAsync('git', [
+					'ls-files',
+					'--cached',
+					'--others',
+					'--exclude-standard',
+				]);
+				files = stdout.split('\n').filter(Boolean);
+			} catch {
+				files = await listWorkspaceFiles();
+			}
+
+			setMentionEntries(createMentionEntries(files));
+		})();
 	}, []);
 
 	const handleToolMessage = useCallback((content: string) => {
