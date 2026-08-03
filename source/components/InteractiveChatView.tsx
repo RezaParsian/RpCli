@@ -62,12 +62,14 @@ type Props = {
 	version?: string;
 	token: string;
 	onInvalidToken: () => void;
+	onExit: () => void;
 };
 
 export default function InteractiveChatView({
 	version,
 	token,
 	onInvalidToken,
+	onExit,
 }: Props) {
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [input, setInput] = useState('');
@@ -244,6 +246,10 @@ export default function InteractiveChatView({
 	const handleSubmit = useCallback(
 		(value: string) => {
 			if (!value.trim() || loading) return;
+			if (['/exit', '/quit'].includes(value.trim().toLowerCase())) {
+				onExit();
+				return;
+			}
 			hasUserMessage.current = true;
 
 			const userMessage: Message = {
@@ -294,7 +300,7 @@ export default function InteractiveChatView({
 				}
 			})();
 		},
-		[loading, token, confirmTool, handleToolMessage, onInvalidToken],
+		[loading, token, confirmTool, handleToolMessage, onInvalidToken, onExit],
 	);
 
 	return (
@@ -373,6 +379,9 @@ export default function InteractiveChatView({
 								onQueryChange={updateFileQuery}
 								onSelect={selectFile}
 							/>
+						)}
+						{input.trimStart().startsWith('/') && (
+							<Text dimColor>Commands: /exit or /quit — close the app</Text>
 						)}
 					</Box>
 				)}
