@@ -80,7 +80,7 @@ export default function SinglePromptView({
 				</Box>
 			))}
 			{pending ? (
-				<ToolConfirmation call={pending.call} />
+				<ToolConfirmation details={pending.details} />
 			) : response ? (
 				<MarkdownText text={response} />
 			) : (

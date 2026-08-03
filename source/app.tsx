@@ -1,5 +1,5 @@
-import React, {useCallback, useState} from 'react';
-import {Box, Text} from 'ink';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
+import {Box, Text, useApp, useInput} from 'ink';
 import CommitView from './components/CommitView.js';
 import SinglePromptView from './components/SinglePromptView.js';
 import InteractiveChatView from './components/InteractiveChatView.js';
@@ -26,7 +26,35 @@ function Header() {
 }
 
 export default function App({mode, commitAll, prompt, version}: Props) {
+	const {exit} = useApp();
+	const exiting = useRef(false);
 	const [token, setToken] = useState(process.env['DEEPSEEK_TOKEN']);
+	const quit = useCallback(
+		(code = 0) => {
+			if (exiting.current) return;
+			exiting.current = true;
+			exit();
+			setTimeout(() => {
+				process.exit(code);
+			}, 50);
+		},
+		[exit],
+	);
+
+	useInput((input, key) => {
+		if ((key.ctrl && input.toLowerCase() === 'c') || input === '\u0003') {
+			quit(130);
+		}
+	});
+
+	useEffect(() => {
+		const handleInterrupt = () => quit(130);
+		process.on('SIGINT', handleInterrupt);
+		return () => {
+			process.off('SIGINT', handleInterrupt);
+		};
+	}, [quit]);
+
 	const handleInvalidToken = useCallback(() => {
 		delete process.env['DEEPSEEK_TOKEN'];
 		setToken(undefined);
@@ -73,6 +101,7 @@ export default function App({mode, commitAll, prompt, version}: Props) {
 			version={version}
 			token={token}
 			onInvalidToken={handleInvalidToken}
+			onExit={quit}
 		/>
 	);
 }

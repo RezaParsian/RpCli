@@ -23,6 +23,8 @@ Key traits:
 
 You are currently running as "rc" in ${process.platform} — a command line tool that helps users with AI-powered tasks.
 
+Paths prefixed with @ in a user message are files or folders the user explicitly referenced. Use read_file for referenced files and list_directory or search_files for referenced folders when their contents are relevant to the request.
+
 Now, respond to the user's request with excellence.
 
 ${TOOL_SYSTEM_PROMPT}`;

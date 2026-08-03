@@ -15,6 +15,12 @@ export type ToolResult = {
 	result?: string;
 };
 
+export type ToolConfirmationDetails = {
+	title: string;
+	description: string;
+	diff?: string;
+};
+
 type Tool = {
 	name: string;
 	description: string;
@@ -122,6 +128,7 @@ const tools: Tool[] = [
 		name: 'write_file',
 		description:
 			'write_file(path: string, content: string) - Creates or completely overwrites a UTF-8 file inside the current working directory.',
+		requiresConfirmation: true,
 		async execute(arguments_) {
 			const filePath = await safeTargetPath(stringArgument(arguments_, 'path'));
 			const content = textArgument(arguments_, 'content');
@@ -133,6 +140,7 @@ const tools: Tool[] = [
 		name: 'edit_file',
 		description:
 			'edit_file(path: string, old_text: string, new_text: string) - Replaces one unique exact text occurrence in a UTF-8 file.',
+		requiresConfirmation: true,
 		async execute(arguments_) {
 			const filePath = await safePath(stringArgument(arguments_, 'path'));
 			const oldText = stringArgument(arguments_, 'old_text');
@@ -148,8 +156,8 @@ const tools: Tool[] = [
 			await fs.writeFile(
 				filePath,
 				content.slice(0, firstIndex) +
-				newText +
-				content.slice(firstIndex + oldText.length),
+					newText +
+					content.slice(firstIndex + oldText.length),
 				'utf8',
 			);
 			return 'File edited successfully.';
@@ -293,7 +301,8 @@ export function parseToolCall(content: string): ToolCall | undefined {
  */
 export function parseToolCalls(content: string): ToolCall[] {
 	const calls: ToolCall[] = [];
-	const callPattern = /<tool_call\s+name="([^"]+)">\s*([\s\S]*?)\s*<\/tool_call>/g;
+	const callPattern =
+		/<tool_call\s+name="([^"]+)">\s*([\s\S]*?)\s*<\/tool_call>/g;
 	let callMatch: RegExpExecArray | null;
 
 	while ((callMatch = callPattern.exec(content)) !== null) {
@@ -318,7 +327,11 @@ function formatToolOutput(value: unknown): string {
 
 	if (Array.isArray(value)) return value.join('\n');
 
-	if (value && typeof value === 'object' && ('stdout' in value || 'stderr' in value)) {
+	if (
+		value &&
+		typeof value === 'object' &&
+		('stdout' in value || 'stderr' in value)
+	) {
 		const {stdout, stderr} = value as {stdout?: string; stderr?: string};
 		const parts: string[] = [];
 		if (stdout?.trim()) parts.push(stdout.trimEnd());
@@ -401,6 +414,131 @@ export async function executeToolCalls(
 
 export function toolRequiresConfirmation(name: string): boolean {
 	return tools.find(tool => tool.name === name)?.requiresConfirmation ?? false;
+}
+
+function formatDiff(
+	pathLabel: string,
+	oldText: string,
+	newText: string,
+): string {
+	const oldLines = oldText.split('\n');
+	const newLines = newText.split('\n');
+	let start = 0;
+
+	while (
+		start < oldLines.length &&
+		start < newLines.length &&
+		oldLines[start] === newLines[start]
+	) {
+		start += 1;
+	}
+
+	let oldEnd = oldLines.length;
+	let newEnd = newLines.length;
+	while (
+		oldEnd > start &&
+		newEnd > start &&
+		oldLines[oldEnd - 1] === newLines[newEnd - 1]
+	) {
+		oldEnd -= 1;
+		newEnd -= 1;
+	}
+
+	const contextStart = Math.max(0, start - 2);
+	const oldContextEnd = Math.min(oldLines.length, oldEnd + 2);
+	const newContextEnd = Math.min(newLines.length, newEnd + 2);
+	const lines = [`--- a/${pathLabel}`, `+++ b/${pathLabel}`];
+
+	for (let index = contextStart; index < start; index += 1) {
+		lines.push(`  ${oldLines[index] ?? ''}`);
+	}
+
+	for (let index = start; index < oldEnd; index += 1) {
+		lines.push(`- ${oldLines[index] ?? ''}`);
+	}
+
+	for (let index = start; index < newEnd; index += 1) {
+		lines.push(`+ ${newLines[index] ?? ''}`);
+	}
+
+	for (let index = oldEnd; index < oldContextEnd; index += 1) {
+		lines.push(`  ${oldLines[index] ?? ''}`);
+	}
+
+	if (oldContextEnd < oldLines.length || newContextEnd < newLines.length) {
+		lines.push('  …');
+	}
+
+	return lines.join('\n');
+}
+
+export async function describeToolConfirmation(
+	call: ToolCall,
+): Promise<ToolConfirmationDetails> {
+	const requestedPath =
+		typeof call.arguments['path'] === 'string'
+			? call.arguments['path']
+			: 'the requested file';
+
+	switch (call.name) {
+		case 'write_file': {
+			const content = textArgument(call.arguments, 'content');
+			let previousContent = '';
+			let action = 'Create';
+
+			try {
+				const filePath = await safePath(requestedPath);
+				previousContent = await fs.readFile(filePath, 'utf8');
+				action = 'Overwrite';
+			} catch (error) {
+				if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+			}
+
+			return {
+				title: `${action} file?`,
+				description: `${action} ${requestedPath}`,
+				diff: formatDiff(requestedPath, previousContent, content),
+			};
+		}
+		case 'edit_file': {
+			const filePath = await safePath(requestedPath);
+			const content = await fs.readFile(filePath, 'utf8');
+			const oldText = stringArgument(call.arguments, 'old_text');
+			const newText = textArgument(call.arguments, 'new_text');
+			const firstIndex = content.indexOf(oldText);
+			const updatedContent =
+				firstIndex < 0
+					? content
+					: content.slice(0, firstIndex) +
+					  newText +
+					  content.slice(firstIndex + oldText.length);
+
+			return {
+				title: 'Edit file?',
+				description: `Update ${requestedPath}`,
+				diff: formatDiff(requestedPath, content, updatedContent),
+			};
+		}
+		case 'delete_file': {
+			return {
+				title: 'Delete file?',
+				description: `${requestedPath} will be permanently deleted.`,
+			};
+		}
+		case 'run_command': {
+			const command = stringArgument(call.arguments, 'command');
+			return {
+				title: 'Run command?',
+				description: command,
+			};
+		}
+		default: {
+			return {
+				title: 'Allow tool?',
+				description: describeToolActivity(call).replace(/\.\.\.$/, ''),
+			};
+		}
+	}
 }
 
 export function describeToolActivity(call: ToolCall): string {

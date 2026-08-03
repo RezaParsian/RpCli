@@ -1,0 +1,30 @@
+export type SlashCommandContext = {
+	exit: () => void;
+};
+
+export type SlashCommand = {
+	name: string;
+	aliases?: string[];
+	description: string;
+	execute: (context: SlashCommandContext) => void;
+};
+
+// Add new interactive commands here; the picker and parser update automatically.
+export const slashCommands: SlashCommand[] = [
+	{
+		name: '/exit',
+		aliases: ['/quit'],
+		description: 'Close the application',
+		execute({exit}) {
+			exit();
+		},
+	},
+];
+
+export function resolveSlashCommand(value: string): SlashCommand | undefined {
+	const commandName = value.trim().toLowerCase();
+	return slashCommands.find(
+		command =>
+			command.name === commandName || command.aliases?.includes(commandName),
+	);
+}
