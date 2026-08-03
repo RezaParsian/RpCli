@@ -12,11 +12,18 @@ import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import FzfFilePicker, {createMentionEntries} from './FzfFilePicker.js';
 import listWorkspaceFiles from '../core/ListWorkspaceFiles.js';
+import SlashCommandPicker from './SlashCommandPicker.js';
+import {resolveSlashCommand, type SlashCommand} from '../commands/index.js';
 
 const execFileAsync = promisify(execFile);
 
 function mentionQuery(value: string): string | undefined {
 	const match = /(?:^|\s)@([^\s@]*)$/.exec(value);
+	return match?.[1];
+}
+
+function slashCommandQuery(value: string): string | undefined {
+	const match = /^\/([^\s/]*)$/.exec(value.trimStart());
 	return match?.[1];
 }
 
@@ -79,6 +86,7 @@ export default function InteractiveChatView({
 	const [loading, setLoading] = useState(false);
 	const [mentionEntries, setMentionEntries] = useState<string[]>([]);
 	const [filePickerOpen, setFilePickerOpen] = useState(false);
+	const [commandPickerOpen, setCommandPickerOpen] = useState(false);
 	const sessionId = useRef<string>();
 	const initialization = useRef<Promise<void>>();
 	const initializationSucceeded = useRef(false);
@@ -87,6 +95,7 @@ export default function InteractiveChatView({
 	const sessionDeleted = useRef(false);
 	const {pending, confirmTool} = useToolConfirmation();
 	const fileQuery = mentionQuery(input) ?? '';
+	const commandQuery = slashCommandQuery(input) ?? '';
 
 	useInput(
 		(_input, key) => {
@@ -149,12 +158,25 @@ export default function InteractiveChatView({
 				]);
 			}
 		},
-		{isActive: !filePickerOpen && !loading && !pending},
+		{isActive: !filePickerOpen && !commandPickerOpen && !loading && !pending},
 	);
 
 	const handleInputChange = useCallback((value: string) => {
 		setInput(value);
 		setFilePickerOpen(mentionQuery(value) !== undefined);
+		setCommandPickerOpen(slashCommandQuery(value) !== undefined);
+	}, []);
+
+	const runCommand = useCallback(
+		(command: SlashCommand) => {
+			setCommandPickerOpen(false);
+			command.execute({exit: onExit});
+		},
+		[onExit],
+	);
+
+	const updateCommandQuery = useCallback((query: string) => {
+		setInput(`/${query}`);
 	}, []);
 
 	const selectFile = useCallback(
@@ -246,8 +268,9 @@ export default function InteractiveChatView({
 	const handleSubmit = useCallback(
 		(value: string) => {
 			if (!value.trim() || loading) return;
-			if (['/exit', '/quit'].includes(value.trim().toLowerCase())) {
-				onExit();
+			const slashCommand = resolveSlashCommand(value);
+			if (slashCommand) {
+				runCommand(slashCommand);
 				return;
 			}
 			hasUserMessage.current = true;
@@ -300,7 +323,14 @@ export default function InteractiveChatView({
 				}
 			})();
 		},
-		[loading, token, confirmTool, handleToolMessage, onInvalidToken, onExit],
+		[
+			loading,
+			token,
+			confirmTool,
+			handleToolMessage,
+			onInvalidToken,
+			runCommand,
+		],
 	);
 
 	return (
@@ -355,7 +385,7 @@ export default function InteractiveChatView({
 							</Text>
 
 							<TextArea
-								focus={!filePickerOpen}
+								focus={!filePickerOpen && !commandPickerOpen}
 								value={input}
 								cursorPosition={cursorPosition}
 								keybindings={{
@@ -380,8 +410,13 @@ export default function InteractiveChatView({
 								onSelect={selectFile}
 							/>
 						)}
-						{input.trimStart().startsWith('/') && (
-							<Text dimColor>Commands: /exit or /quit — close the app</Text>
+						{commandPickerOpen && (
+							<SlashCommandPicker
+								query={commandQuery}
+								onCancel={() => setCommandPickerOpen(false)}
+								onQueryChange={updateCommandQuery}
+								onSelect={runCommand}
+							/>
 						)}
 					</Box>
 				)}
