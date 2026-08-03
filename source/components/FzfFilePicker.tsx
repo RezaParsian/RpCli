@@ -2,7 +2,7 @@ import React, {useEffect, useMemo, useState} from 'react';
 import {Box, Text, useInput} from 'ink';
 
 type Props = {
-	files: string[];
+	entries: string[];
 	query: string;
 	onCancel: () => void;
 	onQueryChange: (query: string) => void;
@@ -45,14 +45,27 @@ export function findFiles(files: string[], query: string): string[] {
 		.map(result => result.file);
 }
 
+export function createMentionEntries(files: string[]): string[] {
+	const entries = new Set(files);
+
+	for (const file of files) {
+		const parts = file.split('/');
+		for (let index = 1; index < parts.length; index += 1) {
+			entries.add(`${parts.slice(0, index).join('/')}/`);
+		}
+	}
+
+	return [...entries].sort((first, second) => first.localeCompare(second));
+}
+
 export default function FzfFilePicker({
-	files,
+	entries,
 	query,
 	onCancel,
 	onQueryChange,
 	onSelect,
 }: Props) {
-	const matches = useMemo(() => findFiles(files, query), [files, query]);
+	const matches = useMemo(() => findFiles(entries, query), [entries, query]);
 	const [selectedIndex, setSelectedIndex] = useState(0);
 
 	useEffect(() => setSelectedIndex(0), [query]);
@@ -101,14 +114,15 @@ export default function FzfFilePicker({
 			paddingX={1}
 		>
 			<Text color="cyan" bold>
-				Files matching @{query}
+				Files and folders matching @{query}
 			</Text>
 			{matches.length === 0 ? (
-				<Text dimColor>No matching files</Text>
+				<Text dimColor>No matching files or folders</Text>
 			) : (
 				matches.map((file, index) => (
 					<Text key={file} color={index === selectedIndex ? 'cyan' : undefined}>
 						{index === selectedIndex ? '› ' : '  '}
+						{file.endsWith('/') ? '▸ ' : '· '}
 						{file}
 					</Text>
 				))

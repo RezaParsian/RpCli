@@ -10,7 +10,7 @@ import {isInvalidTokenError} from '../core/InvalidTokenError.js';
 import {TextArea} from 'react-ink-textarea';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
-import FzfFilePicker from './FzfFilePicker.js';
+import FzfFilePicker, {createMentionEntries} from './FzfFilePicker.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -38,7 +38,7 @@ export default function InteractiveChatView({
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [input, setInput] = useState('');
 	const [loading, setLoading] = useState(false);
-	const [files, setFiles] = useState<string[]>([]);
+	const [mentionEntries, setMentionEntries] = useState<string[]>([]);
 	const [filePickerOpen, setFilePickerOpen] = useState(false);
 	const sessionId = useRef<string>();
 	const initialization = useRef<Promise<void>>();
@@ -71,9 +71,11 @@ export default function InteractiveChatView({
 			'--exclude-standard',
 		])
 			.then(({stdout}) => {
-				setFiles(stdout.split('\n').filter(Boolean));
+				setMentionEntries(
+					createMentionEntries(stdout.split('\n').filter(Boolean)),
+				);
 			})
-			.catch(() => setFiles([]));
+			.catch(() => setMentionEntries([]));
 	}, []);
 
 	const handleToolMessage = useCallback((content: string) => {
@@ -239,13 +241,13 @@ export default function InteractiveChatView({
 								value={input}
 								onChange={handleInputChange}
 								onSubmit={handleSubmit}
-								placeholder="Type @ to mention a file... (Shift+Enter | Alt+Enter | Ctrl+J for newline)"
+								placeholder="Type @ to mention a file or folder... (Shift+Enter | Alt+Enter | Ctrl+J for newline)"
 								showInvisibles={{space: false, tab: true, newline: false}}
 							/>
 						</Box>
 						{filePickerOpen && (
 							<FzfFilePicker
-								files={files}
+								entries={mentionEntries}
 								query={fileQuery}
 								onCancel={() => setFilePickerOpen(false)}
 								onQueryChange={updateFileQuery}
