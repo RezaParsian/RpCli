@@ -1,5 +1,5 @@
 import React, {useCallback, useEffect, useRef, useState} from 'react';
-import {Box, Text} from 'ink';
+import {Box, Text, useInput} from 'ink';
 import RpCliLogo from './RpCliLogo.js';
 import Spinner from './Spinner.js';
 import MarkdownText from './MarkdownText.js';
@@ -22,6 +22,34 @@ function mentionQuery(value: string): string | undefined {
 function endPosition(value: string): [line: number, column: number] {
 	const lines = value.split('\n');
 	return [lines.length - 1, lines[lines.length - 1]?.length ?? 0];
+}
+
+function cursorOffset(value: string, position: [number, number]): number {
+	const lines = value.split('\n');
+	let offset = 0;
+	for (let index = 0; index < position[0]; index += 1) {
+		offset += (lines[index]?.length ?? 0) + 1;
+	}
+
+	return offset + position[1];
+}
+
+function positionAt(value: string, offset: number): [number, number] {
+	const beforeCursor = value.slice(
+		0,
+		Math.max(0, Math.min(offset, value.length)),
+	);
+	return endPosition(beforeCursor);
+}
+
+function previousWordOffset(value: string, offset: number): number {
+	const beforeCursor = value.slice(0, offset);
+	return beforeCursor.search(/\S+\s*$/);
+}
+
+function nextWordOffset(value: string, offset: number): number {
+	const match = /\s*\S+/.exec(value.slice(offset));
+	return match ? offset + match.index + match[0].length : value.length;
 }
 
 type Message = {
@@ -56,6 +84,70 @@ export default function InteractiveChatView({
 	const sessionDeleted = useRef(false);
 	const {pending, confirmTool} = useToolConfirmation();
 	const fileQuery = mentionQuery(input) ?? '';
+
+	useInput(
+		(_input, key) => {
+			const lines = input.split('\n');
+			const [line, column] = cursorPosition;
+			const offset = cursorOffset(input, cursorPosition);
+
+			if (key.home || (key.ctrl && key.upArrow)) {
+				setCursorPosition(key.ctrl ? [0, 0] : [line, 0]);
+				return;
+			}
+
+			if (key.end || (key.ctrl && key.downArrow)) {
+				setCursorPosition(
+					key.ctrl ? endPosition(input) : [line, lines[line]?.length ?? 0],
+				);
+				return;
+			}
+
+			if (key.leftArrow) {
+				const nextOffset = key.ctrl
+					? previousWordOffset(input, offset)
+					: Math.max(0, offset - 1);
+				setCursorPosition(positionAt(input, nextOffset));
+				return;
+			}
+
+			if (key.rightArrow) {
+				const nextOffset = key.ctrl
+					? nextWordOffset(input, offset)
+					: Math.min(input.length, offset + 1);
+				setCursorPosition(positionAt(input, nextOffset));
+				return;
+			}
+
+			if (key.upArrow && line > 0) {
+				setCursorPosition([
+					line - 1,
+					Math.min(column, lines[line - 1]?.length ?? 0),
+				]);
+			}
+
+			if (key.downArrow && line < lines.length - 1) {
+				setCursorPosition([
+					line + 1,
+					Math.min(column, lines[line + 1]?.length ?? 0),
+				]);
+				return;
+			}
+
+			if (key.pageUp || key.pageDown) {
+				const direction = key.pageUp ? -1 : 1;
+				const targetLine = Math.max(
+					0,
+					Math.min(lines.length - 1, line + direction * 5),
+				);
+				setCursorPosition([
+					targetLine,
+					Math.min(column, lines[targetLine]?.length ?? 0),
+				]);
+			}
+		},
+		{isActive: !filePickerOpen && !loading && !pending},
+	);
 
 	const handleInputChange = useCallback((value: string) => {
 		setInput(value);
@@ -254,6 +346,12 @@ export default function InteractiveChatView({
 								focus={!filePickerOpen}
 								value={input}
 								cursorPosition={cursorPosition}
+								keybindings={{
+									Up: false,
+									Down: false,
+									Left: false,
+									Right: false,
+								}}
 								onChange={handleInputChange}
 								onCursorChange={position => setCursorPosition(position)}
 								onSubmit={handleSubmit}
