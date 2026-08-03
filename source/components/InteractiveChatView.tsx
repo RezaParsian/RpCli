@@ -19,6 +19,11 @@ function mentionQuery(value: string): string | undefined {
 	return match?.[1];
 }
 
+function endPosition(value: string): [line: number, column: number] {
+	const lines = value.split('\n');
+	return [lines.length - 1, lines[lines.length - 1]?.length ?? 0];
+}
+
 type Message = {
 	role: 'user' | 'assistant' | 'console';
 	content: string;
@@ -37,6 +42,9 @@ export default function InteractiveChatView({
 }: Props) {
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [input, setInput] = useState('');
+	const [cursorPosition, setCursorPosition] = useState<
+		[line: number, column: number]
+	>([0, 0]);
 	const [loading, setLoading] = useState(false);
 	const [mentionEntries, setMentionEntries] = useState<string[]>([]);
 	const [filePickerOpen, setFilePickerOpen] = useState(false);
@@ -54,10 +62,15 @@ export default function InteractiveChatView({
 		setFilePickerOpen(mentionQuery(value) !== undefined);
 	}, []);
 
-	const selectFile = useCallback((file: string) => {
-		setInput(previous => previous.replace(/@[^\s@]*$/, `@${file} `));
-		setFilePickerOpen(false);
-	}, []);
+	const selectFile = useCallback(
+		(file: string) => {
+			const nextInput = input.replace(/@[^\s@]*$/, `@${file} `);
+			setInput(nextInput);
+			setCursorPosition(endPosition(nextInput));
+			setFilePickerOpen(false);
+		},
+		[input],
+	);
 
 	const updateFileQuery = useCallback((query: string) => {
 		setInput(previous => previous.replace(/@[^\s@]*$/, `@${query}`));
@@ -142,6 +155,7 @@ export default function InteractiveChatView({
 
 			setMessages(prev => [...prev, userMessage]);
 			setInput('');
+			setCursorPosition([0, 0]);
 			setLoading(true);
 
 			void (async () => {
@@ -239,7 +253,9 @@ export default function InteractiveChatView({
 							<TextArea
 								focus={!filePickerOpen}
 								value={input}
+								cursorPosition={cursorPosition}
 								onChange={handleInputChange}
+								onCursorChange={position => setCursorPosition(position)}
 								onSubmit={handleSubmit}
 								placeholder="Type @ to mention a file or folder... (Shift+Enter | Alt+Enter | Ctrl+J for newline)"
 								showInvisibles={{space: false, tab: true, newline: false}}
