@@ -1,9 +1,13 @@
 import React, {useCallback, useRef, useState} from 'react';
 import {Box, Text, useInput} from 'ink';
-import type {ToolCall} from '../tools/index.js';
+import {
+	describeToolConfirmation,
+	type ToolCall,
+	type ToolConfirmationDetails,
+} from '../tools/index.js';
 
 type PendingConfirmation = {
-	call: ToolCall;
+	details: ToolConfirmationDetails;
 	resolve: (approved: boolean) => void;
 };
 
@@ -11,9 +15,10 @@ export function useToolConfirmation() {
 	const [pending, setPending] = useState<PendingConfirmation>();
 	const pendingReference = useRef<PendingConfirmation>();
 
-	const confirmTool = useCallback((call: ToolCall) => {
+	const confirmTool = useCallback(async (call: ToolCall) => {
+		const details = await describeToolConfirmation(call);
 		return new Promise<boolean>(resolve => {
-			const request = {call, resolve};
+			const request = {details, resolve};
 			pendingReference.current = request;
 			setPending(request);
 		});
@@ -31,7 +36,32 @@ export function useToolConfirmation() {
 	return {pending, confirmTool};
 }
 
-export function ToolConfirmation({call}: {call: ToolCall}) {
+function Diff({content}: {content: string}) {
+	return (
+		<Box flexDirection="column" marginTop={1}>
+			{content.split('\n').map((line, index) => (
+				<Text
+					key={index}
+					color={
+						line.startsWith('+ ')
+							? 'green'
+							: line.startsWith('- ')
+							? 'red'
+							: undefined
+					}
+				>
+					{line}
+				</Text>
+			))}
+		</Box>
+	);
+}
+
+export function ToolConfirmation({
+	details,
+}: {
+	details: ToolConfirmationDetails;
+}) {
 	return (
 		<Box
 			flexDirection="column"
@@ -40,12 +70,14 @@ export function ToolConfirmation({call}: {call: ToolCall}) {
 			paddingX={1}
 		>
 			<Text color="yellow" bold>
-				Tool confirmation required
+				{details.title}
 			</Text>
+			<Text>{details.description}</Text>
+			{details.diff && <Diff content={details.diff} />}
 			<Text>
-				{call.name}: {JSON.stringify(call.arguments)}
+				Proceed? <Text color="green">[y] yes</Text>{' '}
+				<Text color="red">[n] no</Text>
 			</Text>
-			<Text>Allow this action? [y/n]</Text>
 		</Box>
 	);
 }

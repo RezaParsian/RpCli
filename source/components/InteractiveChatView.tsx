@@ -168,7 +168,7 @@ export default function InteractiveChatView({version, token, onInvalidToken,}: P
 				))}
 
 				{pending ? (
-					<ToolConfirmation call={pending.call}/>
+					<ToolConfirmation details={pending.details}/>
 				) : loading ? (
 					<Spinner text="Thinking..."/>
 				) : (
