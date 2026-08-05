@@ -19,6 +19,7 @@ const cli = meow(
 	  $ rc <prompt>                  Send a single prompt
 	  $ rc -t <prompt>               Send a prompt with thinking enabled
 	  $ rc -tq <prompt>              Think silently and show only the answer
+	  $ rc -s <prompt>               Enable web search for a prompt
 	  $ rc -c / --commit-message     Generate commit message from staged changes
 	  $ rc -c -a                     Use git diff HEAD instead of --staged
 
@@ -27,6 +28,7 @@ const cli = meow(
 	  --commit-all, -a      Use git diff HEAD instead of --staged (use with -c)
 	  --thinking, -t        Enable thinking for a single prompt
 	  --quiet, -q           Hide thinking output from a single prompt
+	  --search, -s          Enable web search for a single prompt
 	  --version             Show version
 
 	Examples
@@ -44,6 +46,7 @@ const cli = meow(
 			commitAll: {type: 'boolean', shortFlag: 'a'},
 			thinking: {type: 'boolean', shortFlag: 't'},
 			quiet: {type: 'boolean', shortFlag: 'q'},
+			search: {type: 'boolean', shortFlag: 's'},
 		},
 	},
 );
@@ -53,8 +56,8 @@ const prompt = cli.input.join(' ').trim();
 const mode = cli.flags.commitMessage
 	? 'commit'
 	: prompt
-		? 'prompt'
-		: 'interactive';
+	? 'prompt'
+	: 'interactive';
 
 render(
 	<App
@@ -63,6 +66,7 @@ render(
 		prompt={prompt}
 		thinking={cli.flags.thinking ?? false}
 		quiet={cli.flags.quiet ?? false}
+		search={cli.flags.search ?? false}
 		version={cli.pkg.version}
 	/>,
 	{kittyKeyboard: {mode: 'enabled'}},

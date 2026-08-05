@@ -1,5 +1,5 @@
 import sendMessage from '../core/SendMessage.js';
-import {ChatResult} from '../core/Chat.js';
+import {ChatResult, type ChatStreamChunk} from '../core/Chat.js';
 import {
 	executeToolCalls,
 	formatToolActivityMessage,
@@ -46,8 +46,16 @@ export async function getAIResponse(
 	confirmTool?: (call: ToolCall) => Promise<boolean>,
 	onToolMessage?: (content: string) => void,
 	thinkingEnabled = true,
+	onChunk?: (chunk: ChatStreamChunk) => void,
+	searchEnabled = false,
 ): Promise<ChatResult> {
-	let response = await sendMessage(token, messages, thinkingEnabled);
+	let response = await sendMessage(
+		token,
+		messages,
+		thinkingEnabled,
+		onChunk,
+		searchEnabled,
+	);
 
 	while (true) {
 		let toolCalls: ToolCall[];
@@ -61,6 +69,8 @@ export async function getAIResponse(
 					error instanceof Error ? error.message : String(error)
 				}. Send a corrected tool call or answer without a tool.`,
 				thinkingEnabled,
+				onChunk,
+				searchEnabled,
 			);
 			continue;
 		}
@@ -79,6 +89,8 @@ export async function getAIResponse(
 			token,
 			formatResultsMessage(results),
 			thinkingEnabled,
+			onChunk,
+			searchEnabled,
 		);
 	}
 }

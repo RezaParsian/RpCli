@@ -1,17 +1,25 @@
-import chat, {ChatResult} from "./Chat.js";
-import chatSessions from "./ChatSessions.js";
-import createPowChallenge from "./CreatePowChallenge.js";
-import createSessions from "./CreateSessions.js";
+import chat, {ChatResult, type ChatStreamChunk} from './Chat.js';
+import chatSessions from './ChatSessions.js';
+import createPowChallenge from './CreatePowChallenge.js';
+import createSessions from './CreateSessions.js';
 // @ts-ignore
-import PowSolver from '@rezaparsian/deepseek-pow-solver'
+import PowSolver from '@rezaparsian/deepseek-pow-solver';
 
-let sessionId = process.env["DEEPSEEK_SESSION_ID"];
-let parentMessageId: number | null = process.env['DEEPSEEK_MESSAGE_ID'] ? Number(process.env['DEEPSEEK_MESSAGE_ID']) : null;
+let sessionId = process.env['DEEPSEEK_SESSION_ID'];
+let parentMessageId: number | null = process.env['DEEPSEEK_MESSAGE_ID']
+	? Number(process.env['DEEPSEEK_MESSAGE_ID'])
+	: null;
 
-export default async function sendMessage(token: string, prompt: string, thinkingEnabled = true): Promise<ChatResult> {
+export default async function sendMessage(
+	token: string,
+	prompt: string,
+	thinkingEnabled = true,
+	onChunk?: (chunk: ChatStreamChunk) => void,
+	searchEnabled = false,
+): Promise<ChatResult> {
 	if (parentMessageId === null) {
 		const sessions = await chatSessions(token);
-		const sessionDetail = sessions.find((session) => session.id === sessionId);
+		const sessionDetail = sessions.find(session => session.id === sessionId);
 
 		if (!sessionDetail) {
 			parentMessageId = null;
@@ -37,13 +45,15 @@ export default async function sendMessage(token: string, prompt: string, thinkin
 		sessionId,
 		parentMessageId,
 		prompt,
-		thinking_enabled: thinkingEnabled
+		thinking_enabled: thinkingEnabled,
+		search_enabled: searchEnabled,
+		onChunk,
 	});
 
 	if (!res.ok) {
-		throw new Error(res.error)
+		throw new Error(res.error);
 	} else {
 		parentMessageId = res.messageId || parentMessageId;
-		return res
+		return res;
 	}
 }

@@ -421,6 +421,9 @@ function formatDiff(
 	oldText: string,
 	newText: string,
 ): string {
+	const lines = [`--- a/${pathLabel}`, `+++ b/${pathLabel}`];
+	if (oldText === newText) return [...lines, '  (no changes)'].join('\n');
+
 	const oldLines = oldText.split('\n');
 	const newLines = newText.split('\n');
 	let start = 0;
@@ -447,7 +450,15 @@ function formatDiff(
 	const contextStart = Math.max(0, start - 2);
 	const oldContextEnd = Math.min(oldLines.length, oldEnd + 2);
 	const newContextEnd = Math.min(newLines.length, newEnd + 2);
-	const lines = [`--- a/${pathLabel}`, `+++ b/${pathLabel}`];
+	const oldHunkLength = oldContextEnd - contextStart;
+	const newHunkLength = newContextEnd - contextStart;
+	lines.push(
+		`@@ -${contextStart + 1},${oldHunkLength} +${
+			contextStart + 1
+		},${newHunkLength} @@`,
+	);
+
+	if (contextStart > 0) lines.push('  …');
 
 	for (let index = contextStart; index < start; index += 1) {
 		lines.push(`  ${oldLines[index] ?? ''}`);
@@ -461,8 +472,8 @@ function formatDiff(
 		lines.push(`+ ${newLines[index] ?? ''}`);
 	}
 
-	for (let index = oldEnd; index < oldContextEnd; index += 1) {
-		lines.push(`  ${oldLines[index] ?? ''}`);
+	for (let index = newEnd; index < newContextEnd; index += 1) {
+		lines.push(`  ${newLines[index] ?? ''}`);
 	}
 
 	if (oldContextEnd < oldLines.length || newContextEnd < newLines.length) {
@@ -600,4 +611,23 @@ export function formatToolActivityMessage(
 			return call ? `⚙  ${describeToolActivity(call)}` : '';
 		},
 	);
+}
+
+/** Hides complete and partially streamed tool-call markup from user-facing text. */
+export function hideStreamingToolCalls(content: string): string {
+	const marker = '<tool_call';
+	let visible = content.replace(
+		/<tool_call\s+name="[^"]+">[\s\S]*?<\/tool_call>/g,
+		'',
+	);
+	const incompleteCall = visible.indexOf(marker);
+	if (incompleteCall !== -1) visible = visible.slice(0, incompleteCall);
+
+	for (let length = marker.length - 1; length > 0; length -= 1) {
+		if (visible.endsWith(marker.slice(0, length))) {
+			return visible.slice(0, -length);
+		}
+	}
+
+	return visible;
 }

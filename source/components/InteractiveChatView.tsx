@@ -14,6 +14,7 @@ import FzfFilePicker, {createMentionEntries} from './FzfFilePicker.js';
 import listWorkspaceFiles from '../core/ListWorkspaceFiles.js';
 import SlashCommandPicker from './SlashCommandPicker.js';
 import {resolveSlashCommand, type SlashCommand} from '../commands/index.js';
+import {hideStreamingToolCalls} from '../tools/index.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -61,6 +62,7 @@ function nextWordOffset(value: string, offset: number): number {
 }
 
 type Message = {
+	id?: string;
 	role: 'user' | 'thinking' | 'assistant' | 'console';
 	content: string;
 };
@@ -85,6 +87,7 @@ export default function InteractiveChatView({
 	>([0, 0]);
 	const [loading, setLoading] = useState(false);
 	const [thinkingEnabled, setThinkingEnabled] = useState(true);
+	const [searchEnabled, setSearchEnabled] = useState(false);
 	const [mentionEntries, setMentionEntries] = useState<string[]>([]);
 	const [filePickerOpen, setFilePickerOpen] = useState(false);
 	const [commandPickerOpen, setCommandPickerOpen] = useState(false);
@@ -183,6 +186,21 @@ export default function InteractiveChatView({
 								content: `Thinking ${enabled ? 'enabled' : 'disabled'}.`,
 							},
 						]);
+						setInput('');
+						return enabled;
+					});
+				},
+				toggleSearch() {
+					setSearchEnabled(current => {
+						const enabled = !current;
+						setMessages(previous => [
+							...previous,
+							{
+								role: 'console',
+								content: `Search ${enabled ? 'enabled' : 'disabled'}.`,
+							},
+						]);
+						setInput('');
 						return enabled;
 					});
 				},
@@ -227,10 +245,6 @@ export default function InteractiveChatView({
 
 			setMentionEntries(createMentionEntries(files));
 		})();
-	}, []);
-
-	const handleToolMessage = useCallback((content: string) => {
-		setMessages(previous => [...previous, {role: 'console', content}]);
 	}, []);
 
 	const deleteUnusedSession = useCallback(() => {
@@ -300,6 +314,11 @@ export default function InteractiveChatView({
 			setInput('');
 			setCursorPosition([0, 0]);
 			setLoading(true);
+			const streamId = `${Date.now()}-${Math.random()}`;
+			let thinkingStreamId = `${streamId}-pending-thinking`;
+			let responseStreamId = `${streamId}-pending-response`;
+			let streamedResponse = '';
+			let streamedResponseMessageId: number | null = null;
 
 			void (async () => {
 				try {
@@ -310,11 +329,66 @@ export default function InteractiveChatView({
 						token,
 						userMessage.content,
 						confirmTool,
-						handleToolMessage,
+						content => {
+							setMessages(previous => [
+								...previous.filter(message => message.id !== responseStreamId),
+								{role: 'console', content},
+							]);
+						},
 						thinkingEnabled,
+						chunk => {
+							if (chunk.type === 'response') {
+								if (streamedResponseMessageId !== chunk.messageId) {
+									streamedResponse = '';
+									streamedResponseMessageId = chunk.messageId;
+								}
+								streamedResponse += chunk.content;
+							}
+							const visibleContent =
+								chunk.type === 'response'
+									? hideStreamingToolCalls(streamedResponse)
+									: chunk.content;
+							const id = `${streamId}-${chunk.messageId ?? 'pending'}-${
+								chunk.type
+							}`;
+							if (chunk.type === 'thinking') thinkingStreamId = id;
+							else responseStreamId = id;
+							setMessages(previous => {
+								const index = previous.findIndex(message => message.id === id);
+								if (index === -1) {
+									if (!visibleContent) return previous;
+									return [
+										...previous,
+										{
+											id,
+											role:
+												chunk.type === 'thinking' ? 'thinking' : 'assistant',
+											content: visibleContent,
+										},
+									];
+								}
+
+								const next = [...previous];
+								const message = next[index]!;
+								next[index] = {
+									...message,
+									content:
+										chunk.type === 'response'
+											? visibleContent
+											: message.content + visibleContent,
+								};
+								return next;
+							});
+						},
+						searchEnabled,
 					);
 
 					setMessages(prev => {
+						const withoutFinalStream = prev.filter(
+							message =>
+								message.id !== thinkingStreamId &&
+								message.id !== responseStreamId,
+						);
 						const responseMessages: Message[] = [];
 						if (fullResponse.thinkingContent?.trim()) {
 							responseMessages.push({
@@ -328,22 +402,27 @@ export default function InteractiveChatView({
 							content: fullResponse.content ?? 'Ai Error!',
 						});
 
-						return [...prev, ...responseMessages];
+						return [...withoutFinalStream, ...responseMessages];
 					});
 				} catch (err) {
 					if (isInvalidTokenError(err)) {
 						onInvalidToken();
 						return;
 					}
-					setMessages(prev => [
-						...prev,
-						{
-							role: 'assistant',
-							content: `Error: ${
-								err instanceof Error ? err.message : String(err)
-							}`,
-						},
-					]);
+					setMessages(prev => {
+						const withoutStream = prev.filter(
+							message => !message.id?.startsWith(`${streamId}-`),
+						);
+						return [
+							...withoutStream,
+							{
+								role: 'assistant',
+								content: `Error: ${
+									err instanceof Error ? err.message : String(err)
+								}`,
+							},
+						];
+					});
 				} finally {
 					setLoading(false);
 				}
@@ -353,10 +432,10 @@ export default function InteractiveChatView({
 			loading,
 			token,
 			confirmTool,
-			handleToolMessage,
 			onInvalidToken,
 			runCommand,
 			thinkingEnabled,
+			searchEnabled,
 		],
 	);
 
@@ -366,7 +445,7 @@ export default function InteractiveChatView({
 
 			<Box flexDirection="column" marginX={1}>
 				{messages.map((msg, i) => (
-					<Box key={i} flexDirection="column" marginBottom={1}>
+					<Box key={msg.id ?? i} flexDirection="column" marginBottom={1}>
 						{msg.role === 'user' && (
 							<Box>
 								<Text color="magenta" bold>
@@ -414,13 +493,22 @@ export default function InteractiveChatView({
 					<Box flexDirection="column">
 						<Box justifyContent="space-between" paddingX={1}>
 							<Text dimColor>Ready</Text>
-							<Text>
-								Thinking:{' '}
-								<Text color={thinkingEnabled ? 'green' : 'red'} bold>
-									{thinkingEnabled ? 'ON' : 'OFF'}
-								</Text>{' '}
-								<Text dimColor>(/thinking)</Text>
-							</Text>
+							<Box gap={2}>
+								<Text>
+									Search:{' '}
+									<Text color={searchEnabled ? 'green' : 'red'} bold>
+										{searchEnabled ? 'ON' : 'OFF'}
+									</Text>{' '}
+									<Text dimColor>(/search)</Text>
+								</Text>
+								<Text>
+									Thinking:{' '}
+									<Text color={thinkingEnabled ? 'green' : 'red'} bold>
+										{thinkingEnabled ? 'ON' : 'OFF'}
+									</Text>{' '}
+									<Text dimColor>(/thinking)</Text>
+								</Text>
+							</Box>
 						</Box>
 
 						<Box
@@ -431,43 +519,43 @@ export default function InteractiveChatView({
 							flexDirection="column"
 						>
 							<Box>
-							<Text color="magenta" bold>
-								{'> '}
-							</Text>
+								<Text color="magenta" bold>
+									{'> '}
+								</Text>
 
-							<TextArea
-								focus={!filePickerOpen && !commandPickerOpen}
-								value={input}
-								cursorPosition={cursorPosition}
-								keybindings={{
-									Up: false,
-									Down: false,
-									Left: false,
-									Right: false,
-								}}
-								onChange={handleInputChange}
-								onCursorChange={position => setCursorPosition(position)}
-								onSubmit={handleSubmit}
-								placeholder="Type @ to mention a file or folder... (Shift+Enter | Alt+Enter | Ctrl+J for newline)"
-								showInvisibles={{space: false, tab: true, newline: false}}
-							/>
+								<TextArea
+									focus={!filePickerOpen && !commandPickerOpen}
+									value={input}
+									cursorPosition={cursorPosition}
+									keybindings={{
+										Up: false,
+										Down: false,
+										Left: false,
+										Right: false,
+									}}
+									onChange={handleInputChange}
+									onCursorChange={position => setCursorPosition(position)}
+									onSubmit={handleSubmit}
+									placeholder="Type @ to mention a file or folder... (Shift+Enter | Alt+Enter | Ctrl+J for newline)"
+									showInvisibles={{space: false, tab: true, newline: false}}
+								/>
 							</Box>
 							{filePickerOpen && (
-							<FzfFilePicker
-								entries={mentionEntries}
-								query={fileQuery}
-								onCancel={() => setFilePickerOpen(false)}
-								onQueryChange={updateFileQuery}
-								onSelect={selectFile}
-							/>
+								<FzfFilePicker
+									entries={mentionEntries}
+									query={fileQuery}
+									onCancel={() => setFilePickerOpen(false)}
+									onQueryChange={updateFileQuery}
+									onSelect={selectFile}
+								/>
 							)}
 							{commandPickerOpen && (
-							<SlashCommandPicker
-								query={commandQuery}
-								onCancel={() => setCommandPickerOpen(false)}
-								onQueryChange={updateCommandQuery}
-								onSelect={runCommand}
-							/>
+								<SlashCommandPicker
+									query={commandQuery}
+									onCancel={() => setCommandPickerOpen(false)}
+									onQueryChange={updateCommandQuery}
+									onSelect={runCommand}
+								/>
 							)}
 						</Box>
 					</Box>

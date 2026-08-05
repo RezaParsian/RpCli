@@ -14,6 +14,62 @@ type AnyToken = {
 	lang?: string;
 };
 
+const supportedLanguages = new Set([
+	'bash',
+	'c',
+	'cpp',
+	'csharp',
+	'css',
+	'diff',
+	'go',
+	'ini',
+	'java',
+	'javascript',
+	'json',
+	'kotlin',
+	'less',
+	'lua',
+	'makefile',
+	'markdown',
+	'objectivec',
+	'perl',
+	'php',
+	'php-template',
+	'plaintext',
+	'python',
+	'python-repl',
+	'r',
+	'ruby',
+	'rust',
+	'scss',
+	'shell',
+	'sql',
+	'swift',
+	'typescript',
+	'vbnet',
+	'wasm',
+	'xml',
+	'yaml',
+]);
+
+const languageAliases: Record<string, string> = {
+	csv: 'plaintext',
+	html: 'xml',
+	js: 'javascript',
+	md: 'markdown',
+	sh: 'shell',
+	text: 'plaintext',
+	ts: 'typescript',
+	txt: 'plaintext',
+};
+
+function syntaxLanguage(language?: string): string | undefined {
+	if (!language) return undefined;
+	const normalized = language.trim().split(/\s+/, 1)[0]!.toLowerCase();
+	const resolved = languageAliases[normalized] ?? normalized;
+	return supportedLanguages.has(resolved) ? resolved : 'plaintext';
+}
+
 function renderInline(tokens: AnyToken[]): React.ReactNode {
 	return tokens.map((token, i) => {
 		if (token.type === 'strong') {
@@ -91,7 +147,7 @@ function renderBlock(token: AnyToken, key: number): React.ReactNode {
 			<Box key={key} flexDirection="column" marginY={1}>
 				<SyntaxHighlight
 					code={token.text || ''}
-					language={token.lang}
+					language={syntaxLanguage(token.lang)}
 				/>
 			</Box>
 		);
@@ -123,13 +179,13 @@ function renderBlock(token: AnyToken, key: number): React.ReactNode {
 	}
 
 	if (token.type === 'space') {
-		return <Box key={key} marginBottom={1}/>;
+		return <Box key={key} marginBottom={1} />;
 	}
 
 	return <Text key={key}>{token.raw ?? ''}</Text>;
 }
 
-export default function MarkdownText({text}: { text: string }) {
+export default function MarkdownText({text}: {text: string}) {
 	const tokens = marked.lexer(text) as unknown as AnyToken[];
 
 	return (

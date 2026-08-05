@@ -14,6 +14,7 @@ type Props = {
 	prompt: string;
 	thinking: boolean;
 	quiet: boolean;
+	search: boolean;
 	version?: string;
 };
 
@@ -27,7 +28,15 @@ function Header() {
 	);
 }
 
-export default function App({mode, commitAll, prompt, thinking, quiet, version}: Props) {
+export default function App({
+	mode,
+	commitAll,
+	prompt,
+	thinking,
+	quiet,
+	search,
+	version,
+}: Props) {
 	const {exit} = useApp();
 	const exiting = useRef(false);
 	const [token, setToken] = useState(process.env['DEEPSEEK_TOKEN']);
@@ -93,6 +102,7 @@ export default function App({mode, commitAll, prompt, thinking, quiet, version}:
 					prompt={prompt}
 					thinking={thinking}
 					quiet={quiet}
+					search={search}
 					token={token}
 					onInvalidToken={handleInvalidToken}
 				/>

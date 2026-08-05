@@ -1,5 +1,11 @@
 import {assertValidTokenResponse} from './InvalidTokenError.js';
 
+export type ChatStreamChunk = {
+	type: 'thinking' | 'response';
+	content: string;
+	messageId: number | null;
+};
+
 interface ChatProps {
 	token: string;
 	model_type?: 'default' | 'expert' | 'vision'
@@ -9,6 +15,7 @@ interface ChatProps {
 	sessionId: string;
 	prompt: string;
 	parentMessageId: number | null;
+	onChunk?: (chunk: ChatStreamChunk) => void;
 }
 
 export interface ChatResult {
@@ -40,6 +47,7 @@ export default async function chat({
 									   sessionId,
 									   parentMessageId,
 									   prompt,
+									   onChunk,
 								   }: ChatProps): Promise<ChatResult> {
 
 	if (thinking_enabled && model_type === 'vision') throw new Error('This feature is not available for vision models');
@@ -116,6 +124,9 @@ export default async function chat({
 	let flatThinkingContent = "";
 	let usingFragments = false;
 	let activePatchPath = "";
+	const emitChunk = (type: ChatStreamChunk['type'], content: string) => {
+		if (content) onChunk?.({type, content, messageId: result.messageId ?? null});
+	};
 
 	let buffer = "";
 
@@ -156,17 +167,24 @@ export default async function chat({
 					usingFragments = true;
 					if (fragments.length === 0) {
 						for (const f of r.fragments) {
+							const type = f?.type ?? "RESPONSE";
+							const content = f?.content ?? "";
 							fragments.push({
-								type: f?.type ?? "RESPONSE",
-								content: f?.content ?? "",
+								type,
+								content,
 							});
+							emitChunk(type === "THINK" ? 'thinking' : 'response', content);
 						}
 						activeFragmentIndex = fragments.length - 1;
 					}
 				} else {
-					if (typeof r.content === "string") flatContent += r.content;
+					if (typeof r.content === "string") {
+						flatContent += r.content;
+						emitChunk('response', r.content);
+					}
 					if (typeof r.thinking_content === "string") {
 						flatThinkingContent += r.thinking_content;
+						emitChunk('thinking', r.thinking_content);
 					}
 				}
 				continue;
@@ -175,11 +193,14 @@ export default async function chat({
 			if (parsed.o === "APPEND" && activePatchPath === "response/fragments" && Array.isArray(parsed.v)) {
 				usingFragments = true;
 				for (const f of parsed.v) {
+					const type = f?.type ?? "RESPONSE";
+					const content = f?.content ?? "";
 					fragments.push({
-						type: f?.type ?? "RESPONSE",
-						content: f?.content ?? "",
+						type,
+						content,
 					});
 					activeFragmentIndex = fragments.length - 1;
+					emitChunk(type === "THINK" ? 'thinking' : 'response', content);
 				}
 				continue;
 			}
@@ -187,8 +208,15 @@ export default async function chat({
 			if (usingFragments && typeof parsed.v === "string" && activePatchPath.includes("fragments")) {
 				if (activeFragmentIndex !== null) {
 					fragments[activeFragmentIndex]!.content += parsed.v;
+					emitChunk(
+						fragments[activeFragmentIndex]!.type === "THINK"
+							? 'thinking'
+							: 'response',
+						parsed.v,
+					);
 				} else {
 					flatContent += parsed.v;
+					emitChunk('response', parsed.v);
 				}
 				continue;
 			}
@@ -196,11 +224,13 @@ export default async function chat({
 			if (!usingFragments && typeof parsed.v === "string") {
 				if (activePatchPath === "response/thinking_content") {
 					flatThinkingContent += parsed.v;
+					emitChunk('thinking', parsed.v);
 					continue;
 				}
 
 				if (activePatchPath === "response/content") {
 					flatContent += parsed.v;
+					emitChunk('response', parsed.v);
 					continue;
 				}
 			}

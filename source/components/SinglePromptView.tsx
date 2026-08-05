@@ -6,6 +6,7 @@ import {CHAT_SYSTEM_PROMPT, getAIResponse} from '../actions/chat.js';
 import deleteSession from '../core/DeleteSession.js';
 import {ToolConfirmation, useToolConfirmation} from './ToolConfirmation.js';
 import {isInvalidTokenError} from '../core/InvalidTokenError.js';
+import {hideStreamingToolCalls} from '../tools/index.js';
 
 type State = 'loading' | 'done' | 'error';
 
@@ -13,6 +14,7 @@ type Props = {
 	prompt: string;
 	thinking: boolean;
 	quiet: boolean;
+	search: boolean;
 	token: string;
 	onInvalidToken: () => void;
 };
@@ -21,6 +23,7 @@ export default function SinglePromptView({
 	prompt,
 	thinking,
 	quiet,
+	search,
 	token,
 	onInvalidToken,
 }: Props) {
@@ -36,6 +39,7 @@ export default function SinglePromptView({
 	}, []);
 
 	useEffect(() => {
+		let streamedResponse = '';
 		void (async () => {
 			try {
 				await getAIResponse(
@@ -44,6 +48,8 @@ export default function SinglePromptView({
 					undefined,
 					undefined,
 					thinking,
+					undefined,
+					search,
 				);
 
 				const fullResponse = await getAIResponse(
@@ -52,6 +58,15 @@ export default function SinglePromptView({
 					confirmTool,
 					handleToolMessage,
 					thinking,
+					chunk => {
+						if (chunk.type === 'thinking') {
+							setThinkingResponse(previous => previous + chunk.content);
+						} else {
+							streamedResponse += chunk.content;
+							setResponse(hideStreamingToolCalls(streamedResponse));
+						}
+					},
+					search,
 				);
 
 				deleteSession(token, fullResponse.sessionId);
@@ -69,7 +84,16 @@ export default function SinglePromptView({
 				setState('error');
 			}
 		})();
-	}, [prompt, thinking, token, confirmTool, handleToolMessage, onInvalidToken]);
+	}, [
+		prompt,
+		thinking,
+		quiet,
+		search,
+		token,
+		confirmTool,
+		handleToolMessage,
+		onInvalidToken,
+	]);
 
 	useEffect(() => {
 		if (state !== 'done' && state !== 'error') return;

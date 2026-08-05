@@ -15,6 +15,8 @@ rc                            Open interactive chat mode
 rc "your question"            Send a single prompt without thinking
 rc -t "your question"         Enable and display thinking
 rc -tq "your question"        Enable thinking but display only the final answer
+rc -s "your question"         Enable web search
+rc -st "your question"        Enable web search and thinking
 rc -c                         Generate a commit message from staged changes
 rc -c -a                      Generate a commit message from all changes (HEAD)
 ```
@@ -25,6 +27,7 @@ rc -c -a                      Generate a commit message from all changes (HEAD)
 | --- | --- |
 | `-t`, `--thinking` | Enable thinking for a single prompt. |
 | `-q`, `--quiet` | Hide thinking output. Combine with `-t` as `-tq`. |
+| `-s`, `--search` | Enable web search for a single prompt. |
 | `-c`, `--commit-message` | Generate a commit message from staged changes. |
 | `-a`, `--commit-all` | Use all changes from `HEAD` instead of staged changes. |
 
@@ -43,12 +46,22 @@ before the user sends a message, the unused chat session is deleted automaticall
 Initialization happens silently without replacing the input with a loading indicator.
 Thinking is enabled by default. The status bar shows whether it is on or off; use
 the `/thinking` command to toggle it. Thinking and final responses are displayed
-as separate messages.
+as separate messages. Web search is disabled by default; use `/search` to toggle
+it. The status bar displays the current state of both features.
 
 **Single prompt** (`rc "..."`)
 Sends one question, renders the response as formatted markdown, then exits.
 Thinking is disabled by default. Use `-t` to enable and display it, or `-tq` to
-enable it silently and render only the final answer.
+enable it silently and render only the final answer. Web search is also disabled
+by default and can be enabled with `-s`. Boolean short flags can be combined:
+
+```bash
+rc -st "find the latest Node.js release and explain the changes"
+rc -stq "research this topic and save only the final answer" > answer.md
+```
+
+Thinking and final answers stream to the terminal as they are generated. Raw tool
+call markup is hidden during streaming and replaced by a concise activity message.
 
 **Commit message** (`rc -c`)
 Reads your staged git diff, generates a Conventional Commit message, shows it, and asks for confirmation before committing.
@@ -67,7 +80,7 @@ tool calls returned by the model:
 - `run_command(command)` runs a shell command after user confirmation.
 
 For each tool call, RP-CLI keeps the assistant's explanatory text in the chat and
-replaces the raw `<tool_call>` JSON with a human-readable activity message. These
+replaces the raw `<tool_call>` markup with a human-readable activity message. These
 messages remain in the conversation history instead of disappearing after execution.
 The assistant can chain as many tool calls as the task requires.
 
@@ -76,7 +89,7 @@ tool, register its description and executor in `source/tools/index.ts`; the syst
 prompt is generated from the same registry. Tool calls use this protocol:
 
 ```xml
-<tool_call>
-{"name":"read_file","arguments":{"path":"package.json"}}
+<tool_call name="read_file">
+  <param name="path">package.json</param>
 </tool_call>
 ```
