@@ -123,6 +123,26 @@ export default async function chat({
 	let flatContent = '';
 	let usingFragments = false;
 
+	const normalizeFragmentType = (type: unknown) =>
+		type === undefined || type === null
+			? undefined
+			: String(type).toUpperCase();
+
+	const fragmentKeyAt = (index: number) => {
+		const normalizedIndex = index < 0 ? fragmentOrder.length + index : index;
+		const id = fragmentOrder[normalizedIndex];
+		return id === undefined ? undefined : String(id);
+	};
+
+	const fragmentKeyFromPath = (path: unknown) => {
+		if (typeof path !== 'string') return undefined;
+
+		const match = /(?:^|\/)fragments\/(-?\d+)(?:\/|$)/.exec(path);
+		return match?.[1] === undefined
+			? undefined
+			: fragmentKeyAt(Number(match[1]));
+	};
+
 	const appendFragment = (fragment: any) => {
 		const id = fragment?.id;
 		if (id === undefined || id === null) return;
@@ -133,12 +153,21 @@ export default async function chat({
 			fragmentText[key] = '';
 		}
 
-		if (typeof fragment?.type === 'string') {
-			fragmentTypes[key] = fragment.type;
+		const type = normalizeFragmentType(
+			fragment?.type ?? fragment?.fragment_type,
+		);
+		if (type) {
+			fragmentTypes[key] = type;
 		}
 
 		fragmentText[key] += fragment?.content ?? '';
 		lastFragmentId = id;
+	};
+
+	const appendFragments = (fragments: any) => {
+		for (const fragment of Array.isArray(fragments) ? fragments : [fragments]) {
+			appendFragment(fragment);
+		}
 	};
 
 	let buffer = '';
@@ -176,24 +205,28 @@ export default async function chat({
 
 				if (Array.isArray(r.fragments) && r.fragments.length) {
 					usingFragments = true;
-					for (const fragment of r.fragments) {
-						appendFragment(fragment);
-					}
+					appendFragments(r.fragments);
 				} else if (typeof r.content === 'string' && r.content.length) {
 					flatContent += r.content;
 				}
 				continue;
 			}
 
-			if (
-				Array.isArray(parsed.v) &&
-				parsed.p === 'response/fragments' &&
-				parsed.o === 'APPEND'
-			) {
+			if (parsed.p === 'response/fragments' && parsed.o === 'APPEND') {
 				usingFragments = true;
-				for (const fragment of parsed.v) {
-					appendFragment(fragment);
-				}
+				appendFragments(parsed.v);
+				continue;
+			}
+
+			if (
+				usingFragments &&
+				typeof parsed.p === 'string' &&
+				parsed.p.includes('fragments') &&
+				parsed.p.endsWith('/type')
+			) {
+				const key = fragmentKeyFromPath(parsed.p);
+				const type = normalizeFragmentType(parsed.v);
+				if (key && type) fragmentTypes[key] = type;
 				continue;
 			}
 
@@ -203,7 +236,10 @@ export default async function chat({
 				typeof parsed.p === 'string' &&
 				parsed.p.includes('fragments')
 			) {
-				if (lastFragmentId !== null) {
+				const key = fragmentKeyFromPath(parsed.p);
+				if (key) {
+					fragmentText[key] += parsed.v;
+				} else if (lastFragmentId !== null) {
 					fragmentText[String(lastFragmentId)] += parsed.v;
 				} else {
 					flatContent += parsed.v;
