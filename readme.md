@@ -11,24 +11,46 @@ npm install --global @rezaparsian/rp-cli
 ## Usage
 
 ```
-rp-cli                        Open interactive chat mode
-rp-cli "your question"        Send a single prompt and get a response
-rp-cli -c                     Generate a commit message from staged changes
-rp-cli -c -a                  Generate a commit message from all changes (HEAD)
+rc                            Open interactive chat mode
+rc "your question"            Send a single prompt without thinking
+rc -t "your question"         Enable and display thinking
+rc -tq "your question"        Enable thinking but display only the final answer
+rc -c                         Generate a commit message from staged changes
+rc -c -a                      Generate a commit message from all changes (HEAD)
+```
+
+### Options
+
+| Option | Description |
+| --- | --- |
+| `-t`, `--thinking` | Enable thinking for a single prompt. |
+| `-q`, `--quiet` | Hide thinking output. Combine with `-t` as `-tq`. |
+| `-c`, `--commit-message` | Generate a commit message from staged changes. |
+| `-a`, `--commit-all` | Use all changes from `HEAD` instead of staged changes. |
+
+To save only the final answer while allowing the model to think:
+
+```bash
+rc -tq "write documentation for this project" > documentation.md
 ```
 
 ## Modes
 
-**Interactive chat** (`rp-cli` with no arguments)
+**Interactive chat** (`rc` with no arguments)
 Opens a persistent TUI with the logo, message history, and a text input. Stays open until Ctrl+C.
 The system prompt is sent as soon as interactive mode opens. If the program closes
 before the user sends a message, the unused chat session is deleted automatically.
 Initialization happens silently without replacing the input with a loading indicator.
+Thinking is enabled by default. The status bar shows whether it is on or off; use
+the `/thinking` command to toggle it. Thinking and final responses are displayed
+as separate messages.
 
-**Single prompt** (`rp-cli "..."`)
+**Single prompt** (`rc "..."`)
 Sends one question, renders the response as formatted markdown, then exits.
+Thinking is disabled by default. Use `-t` to enable and display it, or `-tq` to
+enable it silently and render only the final answer.
 
-**Commit message** (`rp-cli -c`)
+**Commit message** (`rc -c`)
 Reads your staged git diff, generates a Conventional Commit message, shows it, and asks for confirmation before committing.
 
 ## AI tools

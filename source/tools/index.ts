@@ -597,7 +597,7 @@ export function formatToolActivityMessage(
 		() => {
 			const call = calls[index];
 			index += 1;
-			return call ? `✾  ${describeToolActivity(call)}` : '';
+			return call ? `⚙  ${describeToolActivity(call)}` : '';
 		},
 	);
 }

@@ -45,8 +45,9 @@ export async function getAIResponse(
 	messages: string,
 	confirmTool?: (call: ToolCall) => Promise<boolean>,
 	onToolMessage?: (content: string) => void,
+	thinkingEnabled = true,
 ): Promise<ChatResult> {
-	let response = await sendMessage(token, messages);
+	let response = await sendMessage(token, messages, thinkingEnabled);
 
 	while (true) {
 		let toolCalls: ToolCall[];
@@ -59,6 +60,7 @@ export async function getAIResponse(
 				`The tool call could not be parsed: ${
 					error instanceof Error ? error.message : String(error)
 				}. Send a corrected tool call or answer without a tool.`,
+				thinkingEnabled,
 			);
 			continue;
 		}
@@ -73,6 +75,10 @@ export async function getAIResponse(
 			confirmTool ? confirmTool(call) : false,
 		);
 
-		response = await sendMessage(token, formatResultsMessage(results));
+		response = await sendMessage(
+			token,
+			formatResultsMessage(results),
+			thinkingEnabled,
+		);
 	}
 }

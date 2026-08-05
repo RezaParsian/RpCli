@@ -15,6 +15,7 @@ export interface ChatResult {
 	ok: boolean;
 	sessionId: string;
 	content?: string;
+	thinkingContent?: string;
 	messageId?: number | null;
 	parentId?: number | null;
 	model?: string | null;
@@ -96,6 +97,7 @@ export default async function chat({
 		ok: true,
 		sessionId,
 		content: "",
+		thinkingContent: "",
 		messageId: null,
 		parentId: null,
 		model: null,
@@ -108,11 +110,12 @@ export default async function chat({
 		finished: false,
 	};
 
-	const fragmentOrder: (number | string)[] = [];
-	const fragmentText: Record<string, string> = {};
-	let lastFragmentId: number | string | null = null;
+	const fragments: Array<{type: string; content: string}> = [];
+	let activeFragmentIndex: number | null = null;
 	let flatContent = "";
+	let flatThinkingContent = "";
 	let usingFragments = false;
+	let activePatchPath = "";
 
 	let buffer = "";
 
@@ -136,6 +139,8 @@ export default async function chat({
 				continue;
 			}
 
+			if (typeof parsed.p === "string") activePatchPath = parsed.p;
+
 			if (parsed.v?.response) {
 				const r = parsed.v.response;
 				result.messageId = r.message_id;
@@ -149,34 +154,55 @@ export default async function chat({
 
 				if (Array.isArray(r.fragments) && r.fragments.length) {
 					usingFragments = true;
-					for (const f of r.fragments) {
-						const id = f?.id;
-						if (id === undefined || id === null) continue;
-						if (!(id in fragmentText)) {
-							fragmentOrder.push(id);
-							fragmentText[id] = "";
+					if (fragments.length === 0) {
+						for (const f of r.fragments) {
+							fragments.push({
+								type: f?.type ?? "RESPONSE",
+								content: f?.content ?? "",
+							});
 						}
-						fragmentText[id] += f?.content ?? "";
-						lastFragmentId = id;
+						activeFragmentIndex = fragments.length - 1;
 					}
-				} else if (typeof r.content === "string" && r.content.length) {
-					flatContent += r.content;
+				} else {
+					if (typeof r.content === "string") flatContent += r.content;
+					if (typeof r.thinking_content === "string") {
+						flatThinkingContent += r.thinking_content;
+					}
 				}
 				continue;
 			}
 
-			if (usingFragments && typeof parsed.v === "string" && typeof parsed.p === "string" && parsed.p.includes("fragments")) {
-				if (lastFragmentId !== null) {
-					fragmentText[lastFragmentId] += parsed.v;
+			if (parsed.o === "APPEND" && activePatchPath === "response/fragments" && Array.isArray(parsed.v)) {
+				usingFragments = true;
+				for (const f of parsed.v) {
+					fragments.push({
+						type: f?.type ?? "RESPONSE",
+						content: f?.content ?? "",
+					});
+					activeFragmentIndex = fragments.length - 1;
+				}
+				continue;
+			}
+
+			if (usingFragments && typeof parsed.v === "string" && activePatchPath.includes("fragments")) {
+				if (activeFragmentIndex !== null) {
+					fragments[activeFragmentIndex]!.content += parsed.v;
 				} else {
 					flatContent += parsed.v;
 				}
 				continue;
 			}
 
-			if (!usingFragments && typeof parsed.v === "string" && (!parsed.p || parsed.p.includes("response/content"))) {
-				flatContent += parsed.v;
-				continue;
+			if (!usingFragments && typeof parsed.v === "string") {
+				if (activePatchPath === "response/thinking_content") {
+					flatThinkingContent += parsed.v;
+					continue;
+				}
+
+				if (activePatchPath === "response/content") {
+					flatContent += parsed.v;
+					continue;
+				}
 			}
 
 			if (parsed.p === "response" && parsed.o === "BATCH") {
@@ -219,8 +245,17 @@ export default async function chat({
 	}
 
 	result.content = usingFragments
-		? fragmentOrder.map(id => fragmentText[id]).join("")
+		? fragments
+			.filter(fragment => fragment.type === "RESPONSE")
+			.map(fragment => fragment.content)
+			.join("")
 		: flatContent;
+	result.thinkingContent = usingFragments
+		? fragments
+			.filter(fragment => fragment.type === "THINK")
+			.map(fragment => fragment.content)
+			.join("")
+		: flatThinkingContent;
 
 	return result;
 }

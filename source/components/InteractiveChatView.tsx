@@ -61,7 +61,7 @@ function nextWordOffset(value: string, offset: number): number {
 }
 
 type Message = {
-	role: 'user' | 'assistant' | 'console';
+	role: 'user' | 'thinking' | 'assistant' | 'console';
 	content: string;
 };
 
@@ -84,6 +84,7 @@ export default function InteractiveChatView({
 		[line: number, column: number]
 	>([0, 0]);
 	const [loading, setLoading] = useState(false);
+	const [thinkingEnabled, setThinkingEnabled] = useState(true);
 	const [mentionEntries, setMentionEntries] = useState<string[]>([]);
 	const [filePickerOpen, setFilePickerOpen] = useState(false);
 	const [commandPickerOpen, setCommandPickerOpen] = useState(false);
@@ -170,7 +171,22 @@ export default function InteractiveChatView({
 	const runCommand = useCallback(
 		(command: SlashCommand) => {
 			setCommandPickerOpen(false);
-			command.execute({exit: onExit});
+			command.execute({
+				exit: onExit,
+				toggleThinking() {
+					setThinkingEnabled(current => {
+						const enabled = !current;
+						setMessages(previous => [
+							...previous,
+							{
+								role: 'console',
+								content: `Thinking ${enabled ? 'enabled' : 'disabled'}.`,
+							},
+						]);
+						return enabled;
+					});
+				},
+			});
 		},
 		[onExit],
 	);
@@ -295,15 +311,25 @@ export default function InteractiveChatView({
 						userMessage.content,
 						confirmTool,
 						handleToolMessage,
+						thinkingEnabled,
 					);
 
-					setMessages(prev => [
-						...prev,
-						{
+					setMessages(prev => {
+						const responseMessages: Message[] = [];
+						if (fullResponse.thinkingContent?.trim()) {
+							responseMessages.push({
+								role: 'thinking',
+								content: fullResponse.thinkingContent,
+							});
+						}
+
+						responseMessages.push({
 							role: 'assistant',
 							content: fullResponse.content ?? 'Ai Error!',
-						},
-					]);
+						});
+
+						return [...prev, ...responseMessages];
+					});
 				} catch (err) {
 					if (isInvalidTokenError(err)) {
 						onInvalidToken();
@@ -330,6 +356,7 @@ export default function InteractiveChatView({
 			handleToolMessage,
 			onInvalidToken,
 			runCommand,
+			thinkingEnabled,
 		],
 	);
 
@@ -359,6 +386,18 @@ export default function InteractiveChatView({
 							</Box>
 						)}
 
+						{msg.role === 'thinking' && (
+							<Box>
+								<Text color="gray" dimColor>
+									{'◈ '}
+								</Text>
+
+								<Text color="gray" dimColor italic>
+									{msg.content}
+								</Text>
+							</Box>
+						)}
+
 						{msg.role === 'console' && (
 							<Box>
 								<MarkdownText text={msg.content} />
@@ -372,14 +411,26 @@ export default function InteractiveChatView({
 				) : loading ? (
 					<Spinner text="Thinking..." />
 				) : (
-					<Box
-						borderStyle="single"
-						borderLeft={false}
-						borderRight={false}
-						borderColor="cyan"
-						flexDirection="column"
-					>
-						<Box>
+					<Box flexDirection="column">
+						<Box justifyContent="space-between" paddingX={1}>
+							<Text dimColor>Ready</Text>
+							<Text>
+								Thinking:{' '}
+								<Text color={thinkingEnabled ? 'green' : 'red'} bold>
+									{thinkingEnabled ? 'ON' : 'OFF'}
+								</Text>{' '}
+								<Text dimColor>(/thinking)</Text>
+							</Text>
+						</Box>
+
+						<Box
+							borderStyle="single"
+							borderLeft={false}
+							borderRight={false}
+							borderColor="cyan"
+							flexDirection="column"
+						>
+							<Box>
 							<Text color="magenta" bold>
 								{'> '}
 							</Text>
@@ -400,8 +451,8 @@ export default function InteractiveChatView({
 								placeholder="Type @ to mention a file or folder... (Shift+Enter | Alt+Enter | Ctrl+J for newline)"
 								showInvisibles={{space: false, tab: true, newline: false}}
 							/>
-						</Box>
-						{filePickerOpen && (
+							</Box>
+							{filePickerOpen && (
 							<FzfFilePicker
 								entries={mentionEntries}
 								query={fileQuery}
@@ -409,15 +460,16 @@ export default function InteractiveChatView({
 								onQueryChange={updateFileQuery}
 								onSelect={selectFile}
 							/>
-						)}
-						{commandPickerOpen && (
+							)}
+							{commandPickerOpen && (
 							<SlashCommandPicker
 								query={commandQuery}
 								onCancel={() => setCommandPickerOpen(false)}
 								onQueryChange={updateCommandQuery}
 								onSelect={runCommand}
 							/>
-						)}
+							)}
+						</Box>
 					</Box>
 				)}
 			</Box>

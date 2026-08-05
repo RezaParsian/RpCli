@@ -12,6 +12,8 @@ type Props = {
 	mode: Mode;
 	commitAll: boolean;
 	prompt: string;
+	thinking: boolean;
+	quiet: boolean;
 	version?: string;
 };
 
@@ -25,7 +27,7 @@ function Header() {
 	);
 }
 
-export default function App({mode, commitAll, prompt, version}: Props) {
+export default function App({mode, commitAll, prompt, thinking, quiet, version}: Props) {
 	const {exit} = useApp();
 	const exiting = useRef(false);
 	const [token, setToken] = useState(process.env['DEEPSEEK_TOKEN']);
@@ -89,6 +91,8 @@ export default function App({mode, commitAll, prompt, version}: Props) {
 				<Header />
 				<SinglePromptView
 					prompt={prompt}
+					thinking={thinking}
+					quiet={quiet}
 					token={token}
 					onInvalidToken={handleInvalidToken}
 				/>

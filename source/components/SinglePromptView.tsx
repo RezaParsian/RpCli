@@ -11,18 +11,23 @@ type State = 'loading' | 'done' | 'error';
 
 type Props = {
 	prompt: string;
+	thinking: boolean;
+	quiet: boolean;
 	token: string;
 	onInvalidToken: () => void;
 };
 
 export default function SinglePromptView({
 	prompt,
+	thinking,
+	quiet,
 	token,
 	onInvalidToken,
 }: Props) {
 	const {exit} = useApp();
 	const [state, setState] = useState<State>('loading');
 	const [response, setResponse] = useState('');
+	const [thinkingResponse, setThinkingResponse] = useState('');
 	const [error, setError] = useState('');
 	const [toolMessages, setToolMessages] = useState<string[]>([]);
 	const {pending, confirmTool} = useToolConfirmation();
@@ -33,18 +38,26 @@ export default function SinglePromptView({
 	useEffect(() => {
 		void (async () => {
 			try {
-				await getAIResponse(token, CHAT_SYSTEM_PROMPT);
+				await getAIResponse(
+					token,
+					CHAT_SYSTEM_PROMPT,
+					undefined,
+					undefined,
+					thinking,
+				);
 
 				const fullResponse = await getAIResponse(
 					token,
 					prompt,
 					confirmTool,
 					handleToolMessage,
+					thinking,
 				);
 
 				deleteSession(token, fullResponse.sessionId);
 
 				setResponse(fullResponse.content ?? 'Ai Error!');
+				setThinkingResponse(fullResponse.thinkingContent ?? '');
 				setState('done');
 			} catch (err) {
 				if (isInvalidTokenError(err)) {
@@ -56,7 +69,7 @@ export default function SinglePromptView({
 				setState('error');
 			}
 		})();
-	}, [prompt, token, confirmTool, handleToolMessage, onInvalidToken]);
+	}, [prompt, thinking, token, confirmTool, handleToolMessage, onInvalidToken]);
 
 	useEffect(() => {
 		if (state !== 'done' && state !== 'error') return;
@@ -74,6 +87,16 @@ export default function SinglePromptView({
 
 	return (
 		<Box flexDirection="column">
+			{thinkingResponse && !quiet && (
+				<Box marginBottom={1}>
+					<Text color="gray" dimColor>
+						{'◈ '}
+					</Text>
+					<Text color="gray" dimColor italic>
+						{thinkingResponse}
+					</Text>
+				</Box>
+			)}
 			{toolMessages.map((message, index) => (
 				<Box key={index} marginBottom={1}>
 					<MarkdownText text={message} />
