@@ -61,7 +61,7 @@ function nextWordOffset(value: string, offset: number): number {
 }
 
 type Message = {
-	role: 'user' | 'assistant' | 'console';
+	role: 'user' | 'assistant' | 'thinking' | 'console';
 	content: string;
 };
 
@@ -213,6 +213,19 @@ export default function InteractiveChatView({
 		})();
 	}, []);
 
+	const appendAssistantResponse = useCallback(
+		(response: {content?: string; thinkingContent?: string}) => {
+			setMessages(previous => [
+				...previous,
+				...(response.thinkingContent?.trim()
+					? [{role: 'thinking' as const, content: response.thinkingContent}]
+					: []),
+				{role: 'assistant' as const, content: response.content ?? 'Ai Error!'},
+			]);
+		},
+		[],
+	);
+
 	const handleToolMessage = useCallback((content: string) => {
 		setMessages(previous => [...previous, {role: 'console', content}]);
 	}, []);
@@ -297,13 +310,7 @@ export default function InteractiveChatView({
 						handleToolMessage,
 					);
 
-					setMessages(prev => [
-						...prev,
-						{
-							role: 'assistant',
-							content: fullResponse.content ?? 'Ai Error!',
-						},
-					]);
+					appendAssistantResponse(fullResponse);
 				} catch (err) {
 					if (isInvalidTokenError(err)) {
 						onInvalidToken();
@@ -328,6 +335,7 @@ export default function InteractiveChatView({
 			token,
 			confirmTool,
 			handleToolMessage,
+			appendAssistantResponse,
 			onInvalidToken,
 			runCommand,
 		],
@@ -355,6 +363,15 @@ export default function InteractiveChatView({
 									✦{' '}
 								</Text>
 
+								<MarkdownText text={msg.content} />
+							</Box>
+						)}
+
+						{msg.role === 'thinking' && (
+							<Box flexDirection="column">
+								<Text color="gray" bold>
+									Thinking
+								</Text>
 								<MarkdownText text={msg.content} />
 							</Box>
 						)}

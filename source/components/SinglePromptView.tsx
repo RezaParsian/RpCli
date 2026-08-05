@@ -22,6 +22,7 @@ export default function SinglePromptView({
 }: Props) {
 	const {exit} = useApp();
 	const [state, setState] = useState<State>('loading');
+	const [thinkingContent, setThinkingContent] = useState('');
 	const [response, setResponse] = useState('');
 	const [error, setError] = useState('');
 	const [toolMessages, setToolMessages] = useState<string[]>([]);
@@ -44,6 +45,7 @@ export default function SinglePromptView({
 
 				deleteSession(token, fullResponse.sessionId);
 
+				setThinkingContent(fullResponse.thinkingContent ?? '');
 				setResponse(fullResponse.content ?? 'Ai Error!');
 				setState('done');
 			} catch (err) {
@@ -82,7 +84,17 @@ export default function SinglePromptView({
 			{pending ? (
 				<ToolConfirmation details={pending.details} />
 			) : response ? (
-				<MarkdownText text={response} />
+				<>
+					{thinkingContent.trim() && (
+						<Box flexDirection="column" marginBottom={1}>
+							<Text color="gray" bold>
+								Thinking
+							</Text>
+							<MarkdownText text={thinkingContent} />
+						</Box>
+					)}
+					<MarkdownText text={response} />
+				</>
 			) : (
 				<Spinner text="Thinking..." />
 			)}
