@@ -2,9 +2,9 @@ import {assertValidTokenResponse} from './InvalidTokenError.js';
 
 interface ChatProps {
 	token: string;
-	model_type?: 'default' | 'expert' | 'vision'
-	thinking_enabled?: boolean
-	search_enabled?: boolean
+	model_type?: 'default' | 'expert' | 'vision';
+	thinking_enabled?: boolean;
+	search_enabled?: boolean;
 	challenge: string;
 	sessionId: string;
 	prompt: string;
@@ -15,6 +15,7 @@ export interface ChatResult {
 	ok: boolean;
 	sessionId: string;
 	content?: string;
+	thinkingContent?: string;
 	messageId?: number | null;
 	parentId?: number | null;
 	model?: string | null;
@@ -31,27 +32,28 @@ export interface ChatResult {
 }
 
 export default async function chat({
-									   token,
-									   model_type = 'default',
-									   thinking_enabled = false,
-									   search_enabled = false,
-									   challenge,
-									   sessionId,
-									   parentMessageId,
-									   prompt,
-								   }: ChatProps): Promise<ChatResult> {
-
-	if (thinking_enabled && model_type === 'vision') throw new Error('This feature is not available for vision models');
-	if (search_enabled && model_type !== 'default') throw new Error('Search is only supported in default model mode');
+	token,
+	model_type = 'default',
+	thinking_enabled = false,
+	search_enabled = false,
+	challenge,
+	sessionId,
+	parentMessageId,
+	prompt,
+}: ChatProps): Promise<ChatResult> {
+	if (thinking_enabled && model_type === 'vision')
+		throw new Error('This feature is not available for vision models');
+	if (search_enabled && model_type !== 'default')
+		throw new Error('Search is only supported in default model mode');
 
 	const response = await fetch(
-		"https://chat.deepseek.com/api/v0/chat/completion",
+		'https://chat.deepseek.com/api/v0/chat/completion',
 		{
-			method: "POST",
+			method: 'POST',
 			headers: {
-				"x-ds-pow-response": challenge,
-				"content-type": "application/json",
-				authorization: "Bearer " + token,
+				'x-ds-pow-response': challenge,
+				'content-type': 'application/json',
+				authorization: 'Bearer ' + token,
 			},
 			body: JSON.stringify({
 				chat_session_id: sessionId,
@@ -64,13 +66,13 @@ export default async function chat({
 				action: null,
 				preempt: false,
 			}),
-		}
+		},
 	);
 	assertValidTokenResponse(response);
 
-	const contentType = response.headers.get("content-type");
+	const contentType = response.headers.get('content-type');
 
-	if (!contentType || !contentType.includes("text/event-stream")) {
+	if (!contentType || !contentType.includes('text/event-stream')) {
 		const json = await response.json();
 		assertValidTokenResponse(response, json);
 		if (json.data?.biz_code && json.data.biz_code !== 0) {
@@ -82,11 +84,16 @@ export default async function chat({
 				raw: json,
 			};
 		}
-		return {ok: false, sessionId, error: "unexpected non-stream response", raw: json};
+		return {
+			ok: false,
+			sessionId,
+			error: 'unexpected non-stream response',
+			raw: json,
+		};
 	}
 
 	if (!response.body) {
-		return {ok: false, sessionId, error: "no response body"};
+		return {ok: false, sessionId, error: 'no response body'};
 	}
 
 	const reader = response.body.getReader();
@@ -95,7 +102,8 @@ export default async function chat({
 	const result: ChatResult = {
 		ok: true,
 		sessionId,
-		content: "",
+		content: '',
+		thinkingContent: '',
 		messageId: null,
 		parentId: null,
 		model: null,
@@ -110,11 +118,30 @@ export default async function chat({
 
 	const fragmentOrder: (number | string)[] = [];
 	const fragmentText: Record<string, string> = {};
+	const fragmentTypes: Record<string, string> = {};
 	let lastFragmentId: number | string | null = null;
-	let flatContent = "";
+	let flatContent = '';
 	let usingFragments = false;
 
-	let buffer = "";
+	const appendFragment = (fragment: any) => {
+		const id = fragment?.id;
+		if (id === undefined || id === null) return;
+
+		const key = String(id);
+		if (!(key in fragmentText)) {
+			fragmentOrder.push(id);
+			fragmentText[key] = '';
+		}
+
+		if (typeof fragment?.type === 'string') {
+			fragmentTypes[key] = fragment.type;
+		}
+
+		fragmentText[key] += fragment?.content ?? '';
+		lastFragmentId = id;
+	};
+
+	let buffer = '';
 
 	while (true) {
 		const {done, value} = await reader.read();
@@ -123,11 +150,11 @@ export default async function chat({
 
 		buffer += decoder.decode(value, {stream: true});
 
-		const lines = buffer.split("\n");
-		buffer = lines.pop() ?? "";
+		const lines = buffer.split('\n');
+		buffer = lines.pop() ?? '';
 
 		for (const line of lines) {
-			if (!line.startsWith("data: ")) continue;
+			if (!line.startsWith('data: ')) continue;
 
 			let parsed: any;
 			try {
@@ -149,78 +176,102 @@ export default async function chat({
 
 				if (Array.isArray(r.fragments) && r.fragments.length) {
 					usingFragments = true;
-					for (const f of r.fragments) {
-						const id = f?.id;
-						if (id === undefined || id === null) continue;
-						if (!(id in fragmentText)) {
-							fragmentOrder.push(id);
-							fragmentText[id] = "";
-						}
-						fragmentText[id] += f?.content ?? "";
-						lastFragmentId = id;
+					for (const fragment of r.fragments) {
+						appendFragment(fragment);
 					}
-				} else if (typeof r.content === "string" && r.content.length) {
+				} else if (typeof r.content === 'string' && r.content.length) {
 					flatContent += r.content;
 				}
 				continue;
 			}
 
-			if (usingFragments && typeof parsed.v === "string" && typeof parsed.p === "string" && parsed.p.includes("fragments")) {
+			if (
+				Array.isArray(parsed.v) &&
+				parsed.p === 'response/fragments' &&
+				parsed.o === 'APPEND'
+			) {
+				usingFragments = true;
+				for (const fragment of parsed.v) {
+					appendFragment(fragment);
+				}
+				continue;
+			}
+
+			if (
+				usingFragments &&
+				typeof parsed.v === 'string' &&
+				typeof parsed.p === 'string' &&
+				parsed.p.includes('fragments')
+			) {
 				if (lastFragmentId !== null) {
-					fragmentText[lastFragmentId] += parsed.v;
+					fragmentText[String(lastFragmentId)] += parsed.v;
 				} else {
 					flatContent += parsed.v;
 				}
 				continue;
 			}
 
-			if (!usingFragments && typeof parsed.v === "string" && (!parsed.p || parsed.p.includes("response/content"))) {
+			if (
+				!usingFragments &&
+				typeof parsed.v === 'string' &&
+				(!parsed.p || parsed.p.includes('response/content'))
+			) {
 				flatContent += parsed.v;
 				continue;
 			}
 
-			if (parsed.p === "response" && parsed.o === "BATCH") {
+			if (parsed.p === 'response' && parsed.o === 'BATCH') {
 				for (const item of parsed.v) {
-					if (item.p === "accumulated_token_usage")
-						result.tokenUsage = item.v;
-					if (item.p === "quasi_status" && item.v === "FINISHED")
+					if (item.p === 'accumulated_token_usage') result.tokenUsage = item.v;
+					if (item.p === 'quasi_status' && item.v === 'FINISHED')
 						result.finished = true;
 				}
 				continue;
 			}
 
-			if (parsed.p === "response/accumulated_token_usage" && parsed.o === "SET") {
+			if (
+				parsed.p === 'response/accumulated_token_usage' &&
+				parsed.o === 'SET'
+			) {
 				result.tokenUsage = parsed.v;
 				continue;
 			}
 
-			if (parsed.p === "response/status" && parsed.v === "FINISHED") {
-				result.status = "FINISHED";
+			if (parsed.p === 'response/status' && parsed.v === 'FINISHED') {
+				result.status = 'FINISHED';
 				result.finished = true;
 				continue;
 			}
 
-			if ("updated_at" in parsed && Object.keys(parsed).length === 1) {
+			if ('updated_at' in parsed && Object.keys(parsed).length === 1) {
 				result.updatedAt = parsed.updated_at;
 			}
 		}
 	}
 
 	buffer += decoder.decode();
-	if (buffer.startsWith("data: ")) {
+	if (buffer.startsWith('data: ')) {
 		try {
 			const parsed = JSON.parse(buffer.slice(6));
-			if (parsed.p === "response/status" && parsed.v === "FINISHED") {
-				result.status = "FINISHED";
+			if (parsed.p === 'response/status' && parsed.v === 'FINISHED') {
+				result.status = 'FINISHED';
 				result.finished = true;
 			}
-		} catch {
-		}
+		} catch {}
 	}
 
-	result.content = usingFragments
-		? fragmentOrder.map(id => fragmentText[id]).join("")
-		: flatContent;
+	if (usingFragments) {
+		result.content = fragmentOrder
+			.filter(id => fragmentTypes[String(id)] !== 'THINK')
+			.map(id => fragmentText[String(id)])
+			.join('');
+		result.thinkingContent = fragmentOrder
+			.filter(id => fragmentTypes[String(id)] === 'THINK')
+			.map(id => fragmentText[String(id)])
+			.join('');
+	} else {
+		result.content = flatContent;
+	}
 
 	return result;
 }
