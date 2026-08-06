@@ -92,6 +92,7 @@ export default function InteractiveChatView({
 	const [mentionEntries, setMentionEntries] = useState<string[]>([]);
 	const [filePickerOpen, setFilePickerOpen] = useState(false);
 	const [commandPickerOpen, setCommandPickerOpen] = useState(false);
+	const [mode, setMode] = useState<'plan' | 'normal' | 'yolo'>('normal');
 	const sessionId = useRef<string>();
 	const initialization = useRef<Promise<void>>();
 	const initializationSucceeded = useRef(false);
@@ -162,6 +163,14 @@ export default function InteractiveChatView({
 					Math.min(column, lines[targetLine]?.length ?? 0),
 				]);
 			}
+
+			if (key.tab) {
+				setMode(prev => {
+					if (prev === 'normal') return 'yolo';
+					if (prev === 'yolo') return 'plan';
+					return 'normal';
+				});
+			}
 		},
 		{isActive: !filePickerOpen && !commandPickerOpen && !loading && !pending},
 	);
@@ -177,7 +186,7 @@ export default function InteractiveChatView({
 			setCommandPickerOpen(false);
 			command.execute({
 				init() {
-					handleSubmit(InitPrompt(),false)
+					handleSubmit(InitPrompt(), false)
 				},
 				toggleThinking() {
 					setThinkingEnabled(current => {
@@ -390,6 +399,7 @@ export default function InteractiveChatView({
 							});
 						},
 						searchEnabled,
+						mode
 					);
 
 					setMessages(prev => {
@@ -480,9 +490,7 @@ export default function InteractiveChatView({
 									{'◈ '}
 								</Text>
 
-								<Text color="gray" dimColor italic>
-									{msg.content}
-								</Text>
+								<MarkdownText text={msg.content} isThinking/>
 							</Box>
 						)}
 
@@ -502,7 +510,16 @@ export default function InteractiveChatView({
 					<Box flexDirection="column">
 						<Box justifyContent="space-between" paddingX={1}>
 							<Text dimColor>Ready</Text>
+
 							<Box gap={2}>
+								<Text>
+									Mode:{' '}
+									<Text color={mode === 'yolo' ? 'red' : mode === 'normal' ? 'yellow' : 'green'}>
+										{mode}
+									</Text> {' '}
+									<Text dimColor>(TAB)</Text>
+								</Text>
+
 								<Text>
 									Search:{' '}
 									<Text color={searchEnabled ? 'green' : 'red'} bold>
@@ -510,6 +527,7 @@ export default function InteractiveChatView({
 									</Text>{' '}
 									<Text dimColor>(/search)</Text>
 								</Text>
+
 								<Text>
 									Thinking:{' '}
 									<Text color={thinkingEnabled ? 'green' : 'red'} bold>

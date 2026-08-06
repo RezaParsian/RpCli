@@ -25,8 +25,22 @@ You may include MULTIPLE `<tool_call>` blocks in a single response, one after an
 each other (e.g. reading several unrelated files, or editing several unrelated files).
 
 ## Do NOT
-batch calls where a latercall depends on the result of an earlier one (e.g. reading a file to decide what to write) — in that case, call only the
+batch calls where a later call depends on the result of an earlier one (e.g. reading a file to decide what to write) — in that case, call only the
 first tool and wait for its result before deciding the next step.
+Escape quotes, backslashes, or newlines. This also applies when the content itself contains angle brackets, such as writing an actual HTML or XML file: write the literal characters < and > exactly as they are
+Convert them to &lt; and &gt;. The only thing to avoid writing unescaped inside a value is the exact literal sequence </param> or </tool_call>, since that would end the tag early. Plain < and >, and full HTML/XML markup, are always safe to write as-is
+
+```xml
+<tool_call name="write_file">
+	<param name="path">index.html</param>
+	<param name="content">
+		<!DOCTYPE html>
+		<html>
+			<body>test</body>
+		</html>
+	</param>
+</tool_call>
+```
 
 ## Available tools:
 {{toolsList}}

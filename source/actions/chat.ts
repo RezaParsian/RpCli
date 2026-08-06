@@ -30,6 +30,7 @@ export async function getAIResponse(
 	thinkingEnabled = true,
 	onChunk?: (chunk: ChatStreamChunk) => void,
 	searchEnabled = false,
+	mode: 'plan' | 'normal' | 'yolo' = 'normal'
 ): Promise<ChatResult> {
 	let response = await sendMessage(
 		token,
@@ -63,8 +64,10 @@ export async function getAIResponse(
 			formatToolActivityMessage(response.content ?? '', toolCalls),
 		);
 
-		const results = await executeToolCalls(toolCalls, async call =>
-			confirmTool ? confirmTool(call) : false,
+		const results = await executeToolCalls(
+			toolCalls,
+			async call => confirmTool ? confirmTool(call) : false,
+			mode
 		);
 
 		response = await sendMessage(

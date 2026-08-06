@@ -115,6 +115,7 @@ const tools: Tool[] = [
 		name: 'list_directory',
 		description:
 			'list_directory(path?: string) - Lists files and directories at a path inside the current working directory.',
+		requiresConfirmation: false,
 		async execute(arguments_) {
 			const requestedPath = stringArgument(arguments_, 'path', '.');
 			const directory = await safePath(requestedPath);
@@ -180,6 +181,7 @@ const tools: Tool[] = [
 		name: 'read_file',
 		description:
 			'read_file(path: string) - Reads a UTF-8 text file inside the current working directory (maximum 100 KiB).',
+		requiresConfirmation: false,
 		async execute(arguments_) {
 			const filePath = await safePath(stringArgument(arguments_, 'path'));
 			const stats = await fs.stat(filePath);
@@ -193,6 +195,7 @@ const tools: Tool[] = [
 		name: 'search_files',
 		description:
 			'search_files(query: string, path?: string) - Searches text files under a path and returns up to 50 matching lines.',
+		requiresConfirmation: false,
 		async execute(arguments_) {
 			const query = stringArgument(arguments_, 'query');
 			const directory = await safePath(stringArgument(arguments_, 'path', '.'));
@@ -358,6 +361,7 @@ export type ConfirmationHandler = (call: ToolCall) => Promise<boolean>;
 export async function executeToolCalls(
 	calls: ToolCall[],
 	onConfirm: ConfirmationHandler,
+	mode: 'plan' | 'normal' | 'yolo'
 ): Promise<ToolResult[]> {
 	const results: ToolResult[] = [];
 	let declined = false;
@@ -372,7 +376,7 @@ export async function executeToolCalls(
 			continue;
 		}
 
-		if (toolRequiresConfirmation(call.name)) {
+		if (toolRequiresConfirmation(call.name, mode)) {
 			const confirmed = await onConfirm(call);
 			if (!confirmed) {
 				declined = true;
@@ -391,7 +395,9 @@ export async function executeToolCalls(
 	return results;
 }
 
-export function toolRequiresConfirmation(name: string): boolean {
+export function toolRequiresConfirmation(name: string, mode: 'plan' | 'normal' | 'yolo'): boolean {
+	if (mode === 'yolo') return false;
+
 	return tools.find(tool => tool.name === name)?.requiresConfirmation ?? false;
 }
 

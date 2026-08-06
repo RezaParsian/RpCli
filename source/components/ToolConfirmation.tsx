@@ -17,6 +17,7 @@ export function useToolConfirmation() {
 
 	const confirmTool = useCallback(async (call: ToolCall) => {
 		const details = await describeToolConfirmation(call);
+
 		return new Promise<boolean>(resolve => {
 			const request = {details, resolve};
 			pendingReference.current = request;
