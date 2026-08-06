@@ -2,6 +2,7 @@ export type SlashCommandContext = {
 	exit: () => void;
 	toggleThinking: () => void;
 	toggleSearch: () => void;
+	init: () => void;
 };
 
 export type SlashCommand = {
@@ -13,6 +14,13 @@ export type SlashCommand = {
 
 // Add new interactive commands here; the picker and parser update automatically.
 export const slashCommands: SlashCommand[] = [
+	{
+		name: '/init',
+		description: '',
+		execute: ({init}) => {
+			init()
+		}
+	},
 	{
 		name: '/search',
 		description: 'Toggle web search on or off',

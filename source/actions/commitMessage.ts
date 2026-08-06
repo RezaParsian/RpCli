@@ -1,20 +1,7 @@
 import {execSync} from 'child_process';
 import {getAIResponse} from './chat.js';
 import deleteSession from '../core/DeleteSession.js';
-
-const CHAT_SYSTEM_PROMPT = `You are a senior engineer specialized in writing perfect Conventional Commit messages.
-
-Instructions:
-- Analyze the git diff carefully.
-- Output **ONLY** the commit message. No explanations, no greetings, no extra text.
-- Never use Markdown, code blocks, or any formatting.
-- Use this format:
-
-<type>(optional scope): short summary (max 72 characters)
-
-Optional body explaining what and why the changes were made.
-
-Allowed types: feat, fix, refactor, docs, style, test, chore, perf, ci, build, revert`;
+import {GitCommitMessage} from "../prompts/index.js";
 
 export function getGitDiff(useAll: boolean): string {
 	const diffFlag = useAll ? 'HEAD' : '--staged';
@@ -27,7 +14,7 @@ export async function generateCommitMessage(
 	diff: string,
 	token: string,
 ): Promise<string> {
-	await getAIResponse(token, CHAT_SYSTEM_PROMPT);
+	await getAIResponse(token, GitCommitMessage());
 
 	const response = await getAIResponse(
 		token,

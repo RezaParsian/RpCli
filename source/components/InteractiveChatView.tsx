@@ -15,6 +15,7 @@ import listWorkspaceFiles from '../core/ListWorkspaceFiles.js';
 import SlashCommandPicker from './SlashCommandPicker.js';
 import {resolveSlashCommand, type SlashCommand} from '../commands/index.js';
 import {hideStreamingToolCalls} from '../tools/index.js';
+import {InitPrompt} from "../prompts/index.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -75,11 +76,11 @@ type Props = {
 };
 
 export default function InteractiveChatView({
-	version,
-	token,
-	onInvalidToken,
-	onExit,
-}: Props) {
+												version,
+												token,
+												onInvalidToken,
+												onExit,
+											}: Props) {
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [input, setInput] = useState('');
 	const [cursorPosition, setCursorPosition] = useState<
@@ -175,7 +176,9 @@ export default function InteractiveChatView({
 		(command: SlashCommand) => {
 			setCommandPickerOpen(false);
 			command.execute({
-				exit: onExit,
+				init() {
+					handleSubmit(InitPrompt(),false)
+				},
 				toggleThinking() {
 					setThinkingEnabled(current => {
 						const enabled = !current;
@@ -204,6 +207,7 @@ export default function InteractiveChatView({
 						return enabled;
 					});
 				},
+				exit: onExit,
 			});
 		},
 		[onExit],
@@ -296,13 +300,16 @@ export default function InteractiveChatView({
 	}, [deleteUnusedSession, onInvalidToken, token]);
 
 	const handleSubmit = useCallback(
-		(value: string) => {
+		(value: string, addToHistory: boolean = true) => {
 			if (!value.trim() || loading) return;
+
 			const slashCommand = resolveSlashCommand(value);
+
 			if (slashCommand) {
 				runCommand(slashCommand);
 				return;
 			}
+
 			hasUserMessage.current = true;
 
 			const userMessage: Message = {
@@ -310,7 +317,9 @@ export default function InteractiveChatView({
 				content: value.trim(),
 			};
 
-			setMessages(prev => [...prev, userMessage]);
+			if (addToHistory)
+				setMessages(prev => [...prev, userMessage]);
+
 			setInput('');
 			setCursorPosition([0, 0]);
 			setLoading(true);
@@ -441,7 +450,7 @@ export default function InteractiveChatView({
 
 	return (
 		<Box flexDirection="column">
-			<RpCliLogo version={version} />
+			<RpCliLogo version={version}/>
 
 			<Box flexDirection="column" marginX={1}>
 				{messages.map((msg, i) => (
@@ -461,7 +470,7 @@ export default function InteractiveChatView({
 									✦{' '}
 								</Text>
 
-								<MarkdownText text={msg.content} />
+								<MarkdownText text={msg.content}/>
 							</Box>
 						)}
 
@@ -479,16 +488,16 @@ export default function InteractiveChatView({
 
 						{msg.role === 'console' && (
 							<Box>
-								<MarkdownText text={msg.content} />
+								<MarkdownText text={msg.content}/>
 							</Box>
 						)}
 					</Box>
 				))}
 
 				{pending ? (
-					<ToolConfirmation details={pending.details} />
+					<ToolConfirmation details={pending.details}/>
 				) : loading ? (
-					<Spinner text="Thinking..." />
+					<Spinner text="Thinking..."/>
 				) : (
 					<Box flexDirection="column">
 						<Box justifyContent="space-between" paddingX={1}>

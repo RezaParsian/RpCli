@@ -35,8 +35,8 @@
 		"dist"
 	],
 	"scripts": {
-		"build": "tsc",
-		"dev": "tsc --watch",
+		"build": "tsc && node scripts/copy-prompts.mjs",
+		"dev": "node scripts/copy-prompts.mjs && tsc --watch",
 		"prepublishOnly": "pnpm run build",
 		"test": "prettier --check . && xo && ava"
 	},
