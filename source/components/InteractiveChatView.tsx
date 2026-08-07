@@ -455,6 +455,7 @@ export default function InteractiveChatView({
 			runCommand,
 			thinkingEnabled,
 			searchEnabled,
+			mode
 		],
 	);
 
@@ -490,7 +491,7 @@ export default function InteractiveChatView({
 									{'◈ '}
 								</Text>
 
-								<MarkdownText text={msg.content} isThinking/>
+								<Text dimColor italic >{msg.content}</Text>
 							</Box>
 						)}
 

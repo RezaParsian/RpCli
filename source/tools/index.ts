@@ -37,7 +37,7 @@ function stringArgument(
 	name: string,
 	fallback?: string,
 ): string {
-	const value = arguments_[name] ?? fallback;
+	const value = arguments_[name] !== '' ? arguments_[name] : fallback;
 	if (typeof value !== 'string' || value.length === 0) {
 		throw new TypeError(`Argument "${name}" must be a non-empty string.`);
 	}
@@ -157,8 +157,8 @@ const tools: Tool[] = [
 			await fs.writeFile(
 				filePath,
 				content.slice(0, firstIndex) +
-					newText +
-					content.slice(firstIndex + oldText.length),
+				newText +
+				content.slice(firstIndex + oldText.length),
 				'utf8',
 			);
 			return 'File edited successfully.';
@@ -314,7 +314,7 @@ function formatToolOutput(value: unknown): string {
 		typeof value === 'object' &&
 		('stdout' in value || 'stderr' in value)
 	) {
-		const {stdout, stderr} = value as {stdout?: string; stderr?: string};
+		const {stdout, stderr} = value as { stdout?: string; stderr?: string };
 		const parts: string[] = [];
 		if (stdout?.trim()) parts.push(stdout.trimEnd());
 		if (stderr?.trim()) parts.push(`stderr:\n${stderr.trimEnd()}`);
@@ -417,7 +417,7 @@ function formatDiff(
 		start < oldLines.length &&
 		start < newLines.length &&
 		oldLines[start] === newLines[start]
-	) {
+		) {
 		start += 1;
 	}
 
@@ -427,7 +427,7 @@ function formatDiff(
 		oldEnd > start &&
 		newEnd > start &&
 		oldLines[oldEnd - 1] === newLines[newEnd - 1]
-	) {
+		) {
 		oldEnd -= 1;
 		newEnd -= 1;
 	}
@@ -506,8 +506,8 @@ export async function describeToolConfirmation(
 				firstIndex < 0
 					? content
 					: content.slice(0, firstIndex) +
-					  newText +
-					  content.slice(firstIndex + oldText.length);
+					newText +
+					content.slice(firstIndex + oldText.length);
 
 			return {
 				title: 'Edit file?',

@@ -1,4 +1,6 @@
 import {assertValidTokenResponse} from './InvalidTokenError.js';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export type ChatStreamChunk = {
 	type: 'thinking' | 'response';
@@ -118,7 +120,9 @@ export default async function chat({
 		finished: false,
 	};
 
-	const fragments: Array<{type: string; content: string}> = [];
+	const rawEvents: any[] = [];
+
+	const fragments: Array<{ type: string; content: string }> = [];
 	let activeFragmentIndex: number | null = null;
 	let flatContent = "";
 	let flatThinkingContent = "";
@@ -146,6 +150,7 @@ export default async function chat({
 			let parsed: any;
 			try {
 				parsed = JSON.parse(line.slice(6));
+				rawEvents.push(parsed);
 			} catch (e) {
 				continue;
 			}
@@ -287,5 +292,32 @@ export default async function chat({
 			.join("")
 		: flatThinkingContent;
 
+	// Log raw events for debugging if enabled
+	{
+		const logDir = path.join(process.cwd(), 'logs');
+
+		if (!fs.existsSync(logDir)) {
+			fs.mkdirSync(logDir, {recursive: true});
+		}
+
+		if (!fs.existsSync(path.join(logDir, sessionId))) {
+			fs.mkdirSync(path.join(logDir, sessionId));
+		}
+
+		const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+		const logFile = path.join(logDir,sessionId, `chat_${timestamp}.json`);
+		const logData = {
+			timestamp: new Date().toISOString(),
+			sessionId,
+			parentMessageId,
+			prompt,
+			model_type,
+			thinking_enabled,
+			search_enabled,
+			events: rawEvents,
+			result,
+		};
+		fs.writeFileSync(logFile, JSON.stringify(logData, null, 2));
+	}
 	return result;
 }
