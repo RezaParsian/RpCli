@@ -1,6 +1,7 @@
 import {assertValidTokenResponse} from './InvalidTokenError.js';
 import * as fs from 'fs';
 import * as path from 'path';
+import {tokenConfigDirectory} from "./TokenConfig.js";
 
 export type ChatStreamChunk = {
 	type: 'thinking' | 'response';
@@ -294,7 +295,7 @@ export default async function chat({
 
 	// Log raw events for debugging if enabled
 	{
-		const logDir = path.join(process.cwd(), 'logs');
+		const logDir = path.join(tokenConfigDirectory, 'logs');
 
 		if (!fs.existsSync(logDir)) {
 			fs.mkdirSync(logDir, {recursive: true});
@@ -319,5 +320,6 @@ export default async function chat({
 		};
 		fs.writeFileSync(logFile, JSON.stringify(logData, null, 2));
 	}
+
 	return result;
 }

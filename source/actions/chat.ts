@@ -44,7 +44,7 @@ export async function getAIResponse(
 		let toolCalls: ToolCall[];
 
 		try {
-			toolCalls = parseToolCalls(response.content ?? '');
+			toolCalls = parseToolCalls(response.content || '');
 		} catch (error) {
 			response = await sendMessage(
 				token,

@@ -7,6 +7,7 @@ export const tokenConfigDirectory = path.join(
 	'.config',
 	'rp-cli',
 );
+
 export const tokenConfigPath = path.join(tokenConfigDirectory, '.env');
 
 export async function saveDeepSeekToken(token: string): Promise<void> {

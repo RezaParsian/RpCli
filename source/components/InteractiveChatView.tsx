@@ -1,5 +1,5 @@
 import React, {useCallback, useEffect, useRef, useState} from 'react';
-import {Box, Text, useInput} from 'ink';
+import {Box, Text, useInput, Static} from 'ink';
 import RpCliLogo from './RpCliLogo.js';
 import Spinner from './Spinner.js';
 import MarkdownText from './MarkdownText.js';
@@ -63,8 +63,8 @@ function nextWordOffset(value: string, offset: number): number {
 }
 
 type Message = {
-	id?: string;
-	role: 'user' | 'thinking' | 'assistant' | 'console';
+	id: string;
+	role: 'logo' | 'user' | 'thinking' | 'assistant' | 'console';
 	content: string;
 };
 
@@ -75,17 +75,59 @@ type Props = {
 	onExit: () => void;
 };
 
-export default function InteractiveChatView({
-												version,
-												token,
-												onInvalidToken,
-												onExit,
-											}: Props) {
-	const [messages, setMessages] = useState<Message[]>([]);
+const MessageRow = React.memo(function MessageRow({msg, version}: { msg: Message; version?: string }) {
+	return (
+		<Box flexDirection="column" marginBottom={1}>
+			{msg.role === 'logo' && (
+				<RpCliLogo version={version}/>
+			)}
+
+			{msg.role === 'user' && (
+				<Box>
+					<Text color="magenta" bold>
+						{'> '}
+						{msg.content}
+					</Text>
+				</Box>
+			)}
+
+			{msg.role === 'assistant' && (
+				<Box>
+					<Text color="magenta" bold>
+						✦{' '}
+					</Text>
+
+					<MarkdownText text={msg.content}/>
+				</Box>
+			)}
+
+			{msg.role === 'thinking' && (
+				<Box>
+					<Text color="gray" dimColor>
+						{'◈ '}
+					</Text>
+
+					<Text dimColor italic>{msg.content}</Text>
+				</Box>
+			)}
+
+			{msg.role === 'console' && (
+				<Box>
+					<MarkdownText text={msg.content}/>
+				</Box>
+			)}
+		</Box>
+	);
+});
+
+export default function InteractiveChatView({version, token, onInvalidToken, onExit}: Props) {
+	// Seed initial state with the Logo so it's the very first static element
+	const [messages, setMessages] = useState<Message[]>([
+		{id: 'header-logo', role: 'logo', content: ''}
+	]);
+	const [streamingMessages, setStreamingMessages] = useState<Message[]>([]);
 	const [input, setInput] = useState('');
-	const [cursorPosition, setCursorPosition] = useState<
-		[line: number, column: number]
-	>([0, 0]);
+	const [cursorPosition, setCursorPosition] = useState<[line: number, column: number]>([0, 0]);
 	const [loading, setLoading] = useState(false);
 	const [thinkingEnabled, setThinkingEnabled] = useState(true);
 	const [searchEnabled, setSearchEnabled] = useState(false);
@@ -93,6 +135,7 @@ export default function InteractiveChatView({
 	const [filePickerOpen, setFilePickerOpen] = useState(false);
 	const [commandPickerOpen, setCommandPickerOpen] = useState(false);
 	const [mode, setMode] = useState<'plan' | 'normal' | 'yolo'>('normal');
+
 	const sessionId = useRef<string>();
 	const initialization = useRef<Promise<void>>();
 	const initializationSucceeded = useRef(false);
@@ -186,7 +229,7 @@ export default function InteractiveChatView({
 			setCommandPickerOpen(false);
 			command.execute({
 				init() {
-					handleSubmit(InitPrompt(), false)
+					handleSubmit(InitPrompt(), false);
 				},
 				toggleThinking() {
 					setThinkingEnabled(current => {
@@ -194,6 +237,7 @@ export default function InteractiveChatView({
 						setMessages(previous => [
 							...previous,
 							{
+								id: `console-${Date.now()}`,
 								role: 'console',
 								content: `Thinking ${enabled ? 'enabled' : 'disabled'}.`,
 							},
@@ -208,6 +252,7 @@ export default function InteractiveChatView({
 						setMessages(previous => [
 							...previous,
 							{
+								id: `console-${Date.now()}`,
 								role: 'console',
 								content: `Search ${enabled ? 'enabled' : 'disabled'}.`,
 							},
@@ -292,6 +337,7 @@ export default function InteractiveChatView({
 					setMessages(previous => [
 						...previous,
 						{
+							id: `err-${Date.now()}`,
 							role: 'assistant',
 							content: `Error: ${
 								error instanceof Error ? error.message : String(error)
@@ -322,21 +368,79 @@ export default function InteractiveChatView({
 			hasUserMessage.current = true;
 
 			const userMessage: Message = {
+				id: `user-${Date.now()}`,
 				role: 'user',
 				content: value.trim(),
 			};
 
-			if (addToHistory)
+			if (addToHistory) {
 				setMessages(prev => [...prev, userMessage]);
+			}
 
 			setInput('');
 			setCursorPosition([0, 0]);
 			setLoading(true);
+			setStreamingMessages([]);
+
 			const streamId = `${Date.now()}-${Math.random()}`;
-			let thinkingStreamId = `${streamId}-pending-thinking`;
-			let responseStreamId = `${streamId}-pending-response`;
 			let streamedResponse = '';
 			let streamedResponseMessageId: number | null = null;
+
+			const pendingResponses = new Map<string, string>();
+			const pendingThinking = new Map<string, string>();
+			let throttleTimer: NodeJS.Timeout | undefined = undefined;
+			let lastFlush = 0;
+
+			const flushUpdates = () => {
+				clearTimeout(throttleTimer);
+				throttleTimer = undefined;
+
+				if (pendingResponses.size === 0 && pendingThinking.size === 0) return;
+
+				const responseEntries = Array.from(pendingResponses.entries());
+				const thinkingEntries = Array.from(pendingThinking.entries());
+
+				setStreamingMessages(previous => {
+					let next = [...previous];
+
+					for (const [id, rawContent] of responseEntries) {
+						const visibleContent = hideStreamingToolCalls(rawContent);
+						if (!visibleContent) continue;
+						const index = next.findIndex(m => m.id === id);
+						if (index === -1) {
+							next.push({id, role: 'assistant', content: visibleContent});
+						} else {
+							next[index] = {...next[index]!, content: visibleContent};
+						}
+					}
+
+					for (const [id, content] of thinkingEntries) {
+						if (!content) continue;
+						const index = next.findIndex(m => m.id === id);
+						if (index === -1) {
+							next.push({id, role: 'thinking', content});
+						} else {
+							next[index] = {...next[index]!, content};
+						}
+					}
+
+					return next;
+				});
+			};
+
+			const scheduleFlush = () => {
+				const now = Date.now();
+				const remaining = 50 - (now - lastFlush);
+				if (remaining <= 0) {
+					lastFlush = now;
+					flushUpdates();
+				} else if (!throttleTimer) {
+					throttleTimer = setTimeout(() => {
+						lastFlush = Date.now();
+						flushUpdates();
+					}, remaining);
+				}
+			};
 
 			void (async () => {
 				try {
@@ -349,8 +453,8 @@ export default function InteractiveChatView({
 						confirmTool,
 						content => {
 							setMessages(previous => [
-								...previous.filter(message => message.id !== responseStreamId),
-								{role: 'console', content},
+								...previous,
+								{id: `console-${Date.now()}`, role: 'console', content},
 							]);
 						},
 						thinkingEnabled,
@@ -361,88 +465,57 @@ export default function InteractiveChatView({
 									streamedResponseMessageId = chunk.messageId;
 								}
 								streamedResponse += chunk.content;
+								const id = `${streamId}-${chunk.messageId ?? 'pending'}-response`;
+								pendingResponses.set(id, streamedResponse);
+							} else if (chunk.type === 'thinking') {
+								const id = `${streamId}-${chunk.messageId ?? 'pending'}-thinking`;
+								pendingThinking.set(
+									id,
+									(pendingThinking.get(id) ?? '') + chunk.content
+								);
 							}
-							const visibleContent =
-								chunk.type === 'response'
-									? hideStreamingToolCalls(streamedResponse)
-									: chunk.content;
-							const id = `${streamId}-${chunk.messageId ?? 'pending'}-${
-								chunk.type
-							}`;
-							if (chunk.type === 'thinking') thinkingStreamId = id;
-							else responseStreamId = id;
-							setMessages(previous => {
-								const index = previous.findIndex(message => message.id === id);
-								if (index === -1) {
-									if (!visibleContent) return previous;
-									return [
-										...previous,
-										{
-											id,
-											role:
-												chunk.type === 'thinking' ? 'thinking' : 'assistant',
-											content: visibleContent,
-										},
-									];
-								}
-
-								const next = [...previous];
-								const message = next[index]!;
-								next[index] = {
-									...message,
-									content:
-										chunk.type === 'response'
-											? visibleContent
-											: message.content + visibleContent,
-								};
-								return next;
-							});
+							scheduleFlush();
 						},
 						searchEnabled,
 						mode
 					);
 
-					setMessages(prev => {
-						const withoutFinalStream = prev.filter(
-							message =>
-								message.id !== thinkingStreamId &&
-								message.id !== responseStreamId,
-						);
-						const responseMessages: Message[] = [];
-						if (fullResponse.thinkingContent?.trim()) {
-							responseMessages.push({
-								role: 'thinking',
-								content: fullResponse.thinkingContent,
-							});
-						}
-
-						responseMessages.push({
-							role: 'assistant',
-							content: fullResponse.content ?? 'Ai Error!',
+					const finalized: Message[] = [];
+					if (fullResponse.thinkingContent?.trim()) {
+						finalized.push({
+							id: `${streamId}-thinking-final`,
+							role: 'thinking',
+							content: fullResponse.thinkingContent,
 						});
+					}
 
-						return [...withoutFinalStream, ...responseMessages];
+					finalized.push({
+						id: `${streamId}-assistant-final`,
+						role: 'assistant',
+						content: fullResponse.content ?? 'Ai Error!',
 					});
+
+					setMessages(prev => [...prev, ...finalized]);
+					setStreamingMessages([]);
 				} catch (err) {
 					if (isInvalidTokenError(err)) {
 						onInvalidToken();
 						return;
 					}
-					setMessages(prev => {
-						const withoutStream = prev.filter(
-							message => !message.id?.startsWith(`${streamId}-`),
-						);
-						return [
-							...withoutStream,
-							{
-								role: 'assistant',
-								content: `Error: ${
-									err instanceof Error ? err.message : String(err)
-								}`,
-							},
-						];
-					});
+					setMessages(prev => [
+						...prev,
+						{
+							id: `${streamId}-error`,
+							role: 'assistant',
+							content: `Error: ${
+								err instanceof Error ? err.message : String(err)
+							}`,
+						},
+					]);
+					setStreamingMessages([]);
 				} finally {
+					clearTimeout(throttleTimer);
+					throttleTimer = undefined;
 					setLoading(false);
 				}
 			})();
@@ -461,46 +534,15 @@ export default function InteractiveChatView({
 
 	return (
 		<Box flexDirection="column">
-			<RpCliLogo version={version}/>
+			{/* Static section prints the logo first, then all finished messages */}
+			<Static items={messages}>
+				{msg => <MessageRow key={msg.id} msg={msg} version={version} />}
+			</Static>
 
-			<Box flexDirection="column" marginX={1}>
-				{messages.map((msg, i) => (
-					<Box key={msg.id ?? i} flexDirection="column" marginBottom={1}>
-						{msg.role === 'user' && (
-							<Box>
-								<Text color="magenta" bold>
-									{'> '}
-									{msg.content}
-								</Text>
-							</Box>
-						)}
-
-						{msg.role === 'assistant' && (
-							<Box>
-								<Text color="magenta" bold>
-									✦{' '}
-								</Text>
-
-								<MarkdownText text={msg.content}/>
-							</Box>
-						)}
-
-						{msg.role === 'thinking' && (
-							<Box>
-								<Text color="gray" dimColor>
-									{'◈ '}
-								</Text>
-
-								<Text dimColor italic >{msg.content}</Text>
-							</Box>
-						)}
-
-						{msg.role === 'console' && (
-							<Box>
-								<MarkdownText text={msg.content}/>
-							</Box>
-						)}
-					</Box>
+			{/* Dynamic interactive footer stays pinned at the bottom */}
+			<Box flexDirection="column" marginX={1} marginTop={1}>
+				{streamingMessages.map(msg => (
+					<MessageRow key={msg.id} msg={msg} version={version} />
 				))}
 
 				{pending ? (
@@ -517,7 +559,7 @@ export default function InteractiveChatView({
 									Mode:{' '}
 									<Text color={mode === 'yolo' ? 'red' : mode === 'normal' ? 'yellow' : 'green'}>
 										{mode}
-									</Text> {' '}
+									</Text>{' '}
 									<Text dimColor>(TAB)</Text>
 								</Text>
 
@@ -564,7 +606,7 @@ export default function InteractiveChatView({
 									onChange={handleInputChange}
 									onCursorChange={position => setCursorPosition(position)}
 									onSubmit={handleSubmit}
-									placeholder="Type @ to mention a file or folder... (Shift+Enter | Alt+Enter | Ctrl+J for newline)"
+									placeholder="Type @ to mention a file or folder... (Ctrl+J for newline)"
 									showInvisibles={{space: false, tab: true, newline: false}}
 								/>
 							</Box>
