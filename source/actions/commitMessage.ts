@@ -1,7 +1,7 @@
 import {execSync} from 'child_process';
-import {getAIResponse} from './chat.js';
-import deleteSession from '../core/DeleteSession.js';
 import {GitCommitMessage} from "../prompts/index.js";
+import deleteSession from "../../core-lib/DeleteSession.js";
+import {getAIResponse} from "./agent.js";
 
 export function getGitDiff(useAll: boolean): string {
 	const diffFlag = useAll ? 'HEAD' : '--staged';

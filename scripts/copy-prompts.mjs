@@ -4,7 +4,7 @@ import {fileURLToPath} from 'node:url';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const source = path.join(root, 'source', 'prompts');
-const destination = path.join(root, 'dist', 'prompts');
+const destination = path.join(root, 'dist', 'source', 'prompts');
 
 mkdirSync(destination, {recursive: true});
 

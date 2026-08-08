@@ -1,7 +1,4 @@
 import {assertValidTokenResponse} from './InvalidTokenError.js';
-import * as fs from 'fs';
-import * as path from 'path';
-import {tokenConfigDirectory} from "./TokenConfig.js";
 
 export type ChatStreamChunk = {
 	type: 'thinking' | 'response';
@@ -19,6 +16,7 @@ interface ChatProps {
 	prompt: string;
 	parentMessageId: number | null;
 	onChunk?: (chunk: ChatStreamChunk) => void;
+	logFn?: (data: { [key: string]: any, sessionId: string }) => void;
 }
 
 export interface ChatResult {
@@ -51,6 +49,7 @@ export default async function chat({
 									   parentMessageId,
 									   prompt,
 									   onChunk,
+									   logFn
 								   }: ChatProps): Promise<ChatResult> {
 
 	if (thinking_enabled && model_type === 'vision') throw new Error('This feature is not available for vision models');
@@ -293,21 +292,9 @@ export default async function chat({
 			.join("")
 		: flatThinkingContent;
 
-	// Log raw events for debugging if enabled
-	{
-		const logDir = path.join(tokenConfigDirectory, 'logs');
-
-		if (!fs.existsSync(logDir)) {
-			fs.mkdirSync(logDir, {recursive: true});
-		}
-
-		if (!fs.existsSync(path.join(logDir, sessionId))) {
-			fs.mkdirSync(path.join(logDir, sessionId));
-		}
-
-		const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-		const logFile = path.join(logDir,sessionId, `chat_${timestamp}.json`);
-		const logData = {
+	// Log raw events if a log function is provided
+	if (logFn) {
+		logFn({
 			timestamp: new Date().toISOString(),
 			sessionId,
 			parentMessageId,
@@ -317,8 +304,7 @@ export default async function chat({
 			search_enabled,
 			events: rawEvents,
 			result,
-		};
-		fs.writeFileSync(logFile, JSON.stringify(logData, null, 2));
+		});
 	}
 
 	return result;

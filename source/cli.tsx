@@ -3,7 +3,7 @@ import React from 'react';
 import {render} from 'ink';
 import meow from 'meow';
 import dotenv from 'dotenv';
-import {tokenConfigPath} from './core/TokenConfig.js';
+import {tokenConfigPath} from "./core/TokenConfig.js";
 
 dotenv.config({
 	path: tokenConfigPath,

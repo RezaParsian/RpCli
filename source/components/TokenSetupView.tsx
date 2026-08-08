@@ -1,11 +1,8 @@
 import React, {useEffect, useState} from 'react';
 import {Box, Text} from 'ink';
 import TextInput from 'ink-text-input';
-import openDeepSeek, {
-	DEEPSEEK_TOKEN_COMMAND,
-	DEEPSEEK_URL,
-} from '../core/OpenDeepSeek.js';
 import {saveDeepSeekToken} from '../core/TokenConfig.js';
+import openDeepSeek, {DEEPSEEK_TOKEN_COMMAND, DEEPSEEK_URL} from "../../core-lib/OpenDeepSeek.js";
 
 type Props = {
 	onTokenSaved: (token: string) => void;

@@ -1,5 +1,4 @@
-import sendMessage from '../core/SendMessage.js';
-import {ChatResult, type ChatStreamChunk} from '../core/Chat.js';
+import sendMessage from '../core/apiClient.js';
 import {SystemPrompt} from '../prompts/index.js';
 import {
 	executeToolCalls,
@@ -8,6 +7,7 @@ import {
 	type ToolCall,
 	type ToolResult,
 } from '../tools/index.js';
+import {ChatResult, ChatStreamChunk} from "../../core-lib/Chat.js";
 
 export const CHAT_SYSTEM_PROMPT = SystemPrompt();
 

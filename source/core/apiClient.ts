@@ -1,9 +1,10 @@
-import chat, {ChatResult, type ChatStreamChunk} from './Chat.js';
-import chatSessions from './ChatSessions.js';
-import createPowChallenge from './CreatePowChallenge.js';
-import createSessions from './CreateSessions.js';
 // @ts-ignore
 import PowSolver from '@rezaparsian/deepseek-pow-solver';
+import chat, {ChatResult, ChatStreamChunk} from "../../core-lib/Chat.js";
+import createSessions from "../../core-lib/CreateSessions.js";
+import createPowChallenge from "../../core-lib/CreatePowChallenge.js";
+import chatSessions from "../../core-lib/ChatSessions.js";
+import logFn from "./LogChat.js";
 
 let sessionId = process.env['DEEPSEEK_SESSION_ID'];
 let parentMessageId: number | null = process.env['DEEPSEEK_MESSAGE_ID']
@@ -48,6 +49,7 @@ export default async function sendMessage(
 		thinking_enabled: thinkingEnabled,
 		search_enabled: searchEnabled,
 		onChunk,
+		logFn
 	});
 
 	if (!res.ok) {

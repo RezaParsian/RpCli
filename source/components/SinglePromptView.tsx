@@ -2,11 +2,11 @@ import React, {useCallback, useEffect, useState} from 'react';
 import {Box, Text, useApp} from 'ink';
 import Spinner from './Spinner.js';
 import MarkdownText from './MarkdownText.js';
-import {CHAT_SYSTEM_PROMPT, getAIResponse} from '../actions/chat.js';
-import deleteSession from '../core/DeleteSession.js';
 import {ToolConfirmation, useToolConfirmation} from './ToolConfirmation.js';
-import {isInvalidTokenError} from '../core/InvalidTokenError.js';
 import {hideStreamingToolCalls} from '../tools/index.js';
+import deleteSession from "../../core-lib/DeleteSession.js";
+import {isInvalidTokenError} from "../../core-lib/InvalidTokenError.js";
+import {CHAT_SYSTEM_PROMPT, getAIResponse} from "../actions/agent.js";
 
 type State = 'loading' | 'done' | 'error';
 

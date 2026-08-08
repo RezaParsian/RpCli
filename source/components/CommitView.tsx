@@ -6,7 +6,7 @@ import {
 	generateCommitMessage,
 	getGitDiff,
 } from '../actions/commitMessage.js';
-import {isInvalidTokenError} from '../core/InvalidTokenError.js';
+import {isInvalidTokenError} from "../../core-lib/InvalidTokenError.js";
 
 type State =
 	| 'init'
