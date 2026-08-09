@@ -1,4 +1,5 @@
 import {assertValidTokenResponse} from './InvalidTokenError.js';
+import continueChat from './ContinueChat.js';
 
 export type ChatStreamChunk = {
 	type: 'thinking' | 'response';
@@ -39,6 +40,8 @@ export interface ChatResult {
 	raw?: any;
 }
 
+const MAX_CONTINUATIONS = 10;
+
 export default async function chat({
 									   token,
 									   model_type = 'default',
@@ -55,7 +58,7 @@ export default async function chat({
 	if (thinking_enabled && model_type === 'vision') throw new Error('This feature is not available for vision models');
 	if (search_enabled && model_type !== 'default') throw new Error('Search is only supported in default model mode');
 
-	const response = await fetch(
+	let response = await fetch(
 		"https://chat.deepseek.com/api/v0/chat/completion",
 		{
 			method: "POST",
@@ -100,7 +103,6 @@ export default async function chat({
 		return {ok: false, sessionId, error: "no response body"};
 	}
 
-	const reader = response.body.getReader();
 	const decoder = new TextDecoder();
 
 	const result: ChatResult = {
@@ -132,9 +134,13 @@ export default async function chat({
 		if (content) onChunk?.({type, content, messageId: result.messageId ?? null});
 	};
 
-	let buffer = "";
+	let continuationCount = 0;
 
 	while (true) {
+		const reader = response.body.getReader();
+		let buffer = "";
+
+		while (true) {
 		const {done, value} = await reader.read();
 
 		if (done) break;
@@ -244,8 +250,10 @@ export default async function chat({
 				for (const item of parsed.v) {
 					if (item.p === "accumulated_token_usage")
 						result.tokenUsage = item.v;
-					if (item.p === "quasi_status" && item.v === "FINISHED")
-						result.finished = true;
+					if (item.p === "quasi_status") {
+						result.status = item.v;
+						result.finished = item.v === "FINISHED";
+					}
 				}
 				continue;
 			}
@@ -255,9 +263,9 @@ export default async function chat({
 				continue;
 			}
 
-			if (parsed.p === "response/status" && parsed.v === "FINISHED") {
-				result.status = "FINISHED";
-				result.finished = true;
+			if (parsed.p === "response/status" && typeof parsed.v === "string") {
+				result.status = parsed.v;
+				result.finished = parsed.v === "FINISHED";
 				continue;
 			}
 
@@ -265,17 +273,45 @@ export default async function chat({
 				result.updatedAt = parsed.updated_at;
 			}
 		}
-	}
+		}
 
-	buffer += decoder.decode();
-	if (buffer.startsWith("data: ")) {
-		try {
-			const parsed = JSON.parse(buffer.slice(6));
-			if (parsed.p === "response/status" && parsed.v === "FINISHED") {
-				result.status = "FINISHED";
-				result.finished = true;
+		buffer += decoder.decode();
+		if (buffer.startsWith("data: ")) {
+			try {
+				const parsed = JSON.parse(buffer.slice(6));
+				if (parsed.p === "response/status" && typeof parsed.v === "string") {
+					result.status = parsed.v;
+					result.finished = parsed.v === "FINISHED";
+				}
+			} catch {
 			}
-		} catch {
+		}
+
+		if (result.status !== "INCOMPLETE") break;
+		if (typeof result.messageId !== "number") {
+			return {...result, ok: false, error: "cannot continue without a message id"};
+		}
+		if (continuationCount >= MAX_CONTINUATIONS) {
+			return {...result, ok: false, error: "maximum continuation count reached"};
+		}
+
+		continuationCount += 1;
+		response = await continueChat({token, sessionId, messageId: result.messageId});
+		assertValidTokenResponse(response);
+
+		const continuationContentType = response.headers.get("content-type");
+		if (!continuationContentType?.includes("text/event-stream")) {
+			const json = await response.json();
+			assertValidTokenResponse(response, json);
+			return {
+				...result,
+				ok: false,
+				error: "unexpected non-stream continuation response",
+				raw: json,
+			};
+		}
+		if (!response.body) {
+			return {...result, ok: false, error: "no continuation response body"};
 		}
 	}
 

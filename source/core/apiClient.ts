@@ -11,12 +11,16 @@ let parentMessageId: number | null = process.env['DEEPSEEK_MESSAGE_ID']
 	? Number(process.env['DEEPSEEK_MESSAGE_ID'])
 	: null;
 
+const EMPTY_RESPONSE_PROMPT = 'Your previous message contained only thinking and no visible response. Please provide the final answer now.';
+const MAX_EMPTY_RESPONSE_RETRIES = 2;
+
 export default async function sendMessage(
 	token: string,
 	prompt: string,
 	thinkingEnabled = true,
 	onChunk?: (chunk: ChatStreamChunk) => void,
 	searchEnabled = false,
+	emptyResponseRetryCount = 0,
 ): Promise<ChatResult> {
 	if (parentMessageId === null) {
 		const sessions = await chatSessions(token);
@@ -56,6 +60,22 @@ export default async function sendMessage(
 		throw new Error(res.error);
 	} else {
 		parentMessageId = res.messageId || parentMessageId;
+
+		if (
+			!res.content?.trim() &&
+			res.thinkingContent?.trim() &&
+			emptyResponseRetryCount < MAX_EMPTY_RESPONSE_RETRIES
+		) {
+			return sendMessage(
+				token,
+				EMPTY_RESPONSE_PROMPT,
+				thinkingEnabled,
+				onChunk,
+				searchEnabled,
+				emptyResponseRetryCount + 1,
+			);
+		}
+
 		return res;
 	}
 }
