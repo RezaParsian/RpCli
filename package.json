@@ -1,6 +1,6 @@
 {
 	"name": "@rezaparsian/rp-cli",
-	"version": "0.2.0",
+	"version": "0.3.1",
 	"description": "AI-powered CLI — interactive chat, single prompts, and git commit message generation",
 	"license": "MIT",
 	"author": {
@@ -25,7 +25,7 @@
 		"terminal"
 	],
 	"bin": {
-		"rc": "dist/cli.js"
+		"rc": "dist/source/cli.js"
 	},
 	"type": "module",
 	"engines": {
