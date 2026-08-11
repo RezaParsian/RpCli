@@ -1,7 +1,33 @@
 import {promises as fs} from 'node:fs';
 import path from 'node:path';
 import {exec as execCallback} from 'node:child_process';
+import {createRequire} from 'node:module';
 import {promisify} from 'node:util';
+
+type SudoPromptCallback = (
+	error?: Error,
+	stdout?: string | Buffer,
+	stderr?: string | Buffer,
+) => void;
+
+type LegacyUtil = typeof import('node:util') & {
+	isFunction?: (value: unknown) => boolean;
+	isObject?: (value: unknown) => boolean;
+};
+
+const require = createRequire(import.meta.url);
+const legacyUtil = require('node:util') as LegacyUtil;
+legacyUtil.isFunction ??= (value: unknown) => typeof value === 'function';
+legacyUtil.isObject ??= (value: unknown) =>
+	value !== null && (typeof value === 'object' || typeof value === 'function');
+
+const {exec: sudoExecCallback} = require('@slosk/sudo-prompt') as {
+	exec: (
+		command: string,
+		options: {name: string; env: Record<string, string>},
+		callback: SudoPromptCallback,
+	) => void;
+};
 
 export type ToolCall = {
 	name: string;
@@ -31,6 +57,28 @@ type Tool = {
 const rootDirectory = process.cwd();
 const ignoredDirectories = new Set(['.git', 'dist', 'node_modules']);
 const exec = promisify(execCallback);
+
+function elevatedExec(
+	command: string,
+): Promise<{stdout: string; stderr: string}> {
+	return new Promise((resolve, reject) => {
+		sudoExecCallback(
+			command,
+			{name: 'RP CLI', env: process.env as Record<string, string>},
+			(error, stdout, stderr) => {
+				if (error) {
+					reject(error);
+					return;
+				}
+
+				resolve({
+					stdout: stdout?.toString() ?? '',
+					stderr: stderr?.toString() ?? '',
+				});
+			},
+		);
+	});
+}
 
 function stringArgument(
 	arguments_: Record<string, unknown>,
@@ -157,8 +205,8 @@ const tools: Tool[] = [
 			await fs.writeFile(
 				filePath,
 				content.slice(0, firstIndex) +
-				newText +
-				content.slice(firstIndex + oldText.length),
+					newText +
+					content.slice(firstIndex + oldText.length),
 				'utf8',
 			);
 			return 'File edited successfully.';
@@ -234,6 +282,22 @@ const tools: Tool[] = [
 				maxBuffer: 1024 * 1024,
 			});
 			return {stdout, stderr};
+		},
+	},
+	{
+		name: 'run_command_elevated',
+		description:
+			'run_command_elevated(command: string) - Runs a non-graphical shell command with administrator privileges using a native OS authorization dialog. Do not prefix the command with sudo. Always requires user confirmation.',
+		requiresConfirmation: true,
+		async execute(arguments_) {
+			const command = stringArgument(arguments_, 'command');
+			if (/^\s*sudo(?:\s|$)/.test(command)) {
+				throw new Error(
+					'Do not prefix elevated commands with sudo; pass the command itself.',
+				);
+			}
+
+			return elevatedExec(command);
 		},
 	},
 ];
@@ -314,7 +378,7 @@ function formatToolOutput(value: unknown): string {
 		typeof value === 'object' &&
 		('stdout' in value || 'stderr' in value)
 	) {
-		const {stdout, stderr} = value as { stdout?: string; stderr?: string };
+		const {stdout, stderr} = value as {stdout?: string; stderr?: string};
 		const parts: string[] = [];
 		if (stdout?.trim()) parts.push(stdout.trimEnd());
 		if (stderr?.trim()) parts.push(`stderr:\n${stderr.trimEnd()}`);
@@ -361,7 +425,7 @@ export type ConfirmationHandler = (call: ToolCall) => Promise<boolean>;
 export async function executeToolCalls(
 	calls: ToolCall[],
 	onConfirm: ConfirmationHandler,
-	mode: 'plan' | 'normal' | 'yolo'
+	mode: 'plan' | 'normal' | 'yolo',
 ): Promise<ToolResult[]> {
 	const results: ToolResult[] = [];
 	let declined = false;
@@ -395,7 +459,11 @@ export async function executeToolCalls(
 	return results;
 }
 
-export function toolRequiresConfirmation(name: string, mode: 'plan' | 'normal' | 'yolo'): boolean {
+export function toolRequiresConfirmation(
+	name: string,
+	mode: 'plan' | 'normal' | 'yolo',
+): boolean {
+	if (name === 'run_command_elevated') return true;
 	if (mode === 'yolo') return false;
 
 	return tools.find(tool => tool.name === name)?.requiresConfirmation ?? false;
@@ -417,7 +485,7 @@ function formatDiff(
 		start < oldLines.length &&
 		start < newLines.length &&
 		oldLines[start] === newLines[start]
-		) {
+	) {
 		start += 1;
 	}
 
@@ -427,7 +495,7 @@ function formatDiff(
 		oldEnd > start &&
 		newEnd > start &&
 		oldLines[oldEnd - 1] === newLines[newEnd - 1]
-		) {
+	) {
 		oldEnd -= 1;
 		newEnd -= 1;
 	}
@@ -472,11 +540,21 @@ export async function describeToolConfirmation(
 	call: ToolCall,
 ): Promise<ToolConfirmationDetails> {
 	const requestedPath =
-		typeof call.arguments['path'] === 'string'
-			? call.arguments['path']
-			: 'the requested file';
+		typeof call.arguments['path'] === 'string' ? call.arguments['path'] : '.';
 
 	switch (call.name) {
+		case 'list_directory': {
+			return {
+				title: 'List directory?',
+				description: `List entries in ${requestedPath}`,
+			};
+		}
+		case 'read_file': {
+			return {
+				title: 'Read file?',
+				description: `Read ${requestedPath}`,
+			};
+		}
 		case 'write_file': {
 			const content = textArgument(call.arguments, 'content');
 			let previousContent = '';
@@ -502,23 +580,36 @@ export async function describeToolConfirmation(
 			const oldText = stringArgument(call.arguments, 'old_text');
 			const newText = textArgument(call.arguments, 'new_text');
 			const firstIndex = content.indexOf(oldText);
-			const updatedContent =
-				firstIndex < 0
-					? content
-					: content.slice(0, firstIndex) +
-					newText +
-					content.slice(firstIndex + oldText.length);
+
+			if (firstIndex === -1) {
+				throw new Error('old_text was not found in the file.');
+			}
+
+			if (content.indexOf(oldText, firstIndex + oldText.length) !== -1) {
+				throw new Error('old_text is not unique in the file.');
+			}
+
+			if (oldText === newText) {
+				throw new Error('The proposed edit does not change the file.');
+			}
 
 			return {
 				title: 'Edit file?',
 				description: `Update ${requestedPath}`,
-				diff: formatDiff(requestedPath, content, updatedContent),
+				diff: formatDiff(requestedPath, oldText, newText),
 			};
 		}
 		case 'delete_file': {
 			return {
 				title: 'Delete file?',
 				description: `${requestedPath} will be permanently deleted.`,
+			};
+		}
+		case 'search_files': {
+			const query = stringArgument(call.arguments, 'query');
+			return {
+				title: 'Search files?',
+				description: `Search for "${query}" in ${requestedPath}`,
 			};
 		}
 		case 'run_command': {
@@ -528,10 +619,17 @@ export async function describeToolConfirmation(
 				description: command,
 			};
 		}
+		case 'run_command_elevated': {
+			const command = stringArgument(call.arguments, 'command');
+			return {
+				title: 'Run elevated command?',
+				description: `${command}\n\nAn operating-system authorization dialog will open.`,
+			};
+		}
 		default: {
 			return {
-				title: 'Allow tool?',
-				description: describeToolActivity(call).replace(/\.\.\.$/, ''),
+				title: `Allow ${call.name}?`,
+				description: `Run the unrecognized tool "${call.name}"`,
 			};
 		}
 	}
@@ -571,6 +669,13 @@ export function describeToolActivity(call: ToolCall): string {
 					? call.arguments['command']
 					: '';
 			return `Running command: ${command}`;
+		}
+		case 'run_command_elevated': {
+			const command =
+				typeof call.arguments['command'] === 'string'
+					? call.arguments['command']
+					: '';
+			return `Running elevated command: ${command}`;
 		}
 		default: {
 			return `Running ${call.name}...`;

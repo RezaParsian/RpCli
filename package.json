@@ -1,6 +1,6 @@
 {
 	"name": "@rezaparsian/rp-cli",
-	"version": "0.3.1",
+	"version": "0.3.2",
 	"description": "AI-powered CLI — interactive chat, single prompts, and git commit message generation",
 	"license": "MIT",
 	"author": {
@@ -42,6 +42,7 @@
 	},
 	"dependencies": {
 		"@rezaparsian/deepseek-pow-solver": "^1.0.1",
+		"@slosk/sudo-prompt": "^9.2.2",
 		"dotenv": "^17.4.2",
 		"ink": "^7.0.1",
 		"ink-big-text": "^2.0.0",
