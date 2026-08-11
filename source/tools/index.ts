@@ -306,13 +306,25 @@ export function getToolDescriptions(): string[] {
 	return tools.map(tool => tool.description);
 }
 
-function stripOuterNewline(value: string): string {
-	let result = value;
-	if (result.startsWith('\r\n')) result = result.slice(2);
-	else if (result.startsWith('\n')) result = result.slice(1);
+function normalizeParamValue(value: string): string {
+	const openingNewline = /^(\r?\n)/.exec(value)?.[1];
+	if (!openingNewline) return value;
 
-	if (result.endsWith('\r\n')) result = result.slice(0, -2);
-	else if (result.endsWith('\n')) result = result.slice(0, -1);
+	const closingWrapper = /\r?\n([\t ]*)$/.exec(value);
+	let result = value.slice(openingNewline.length);
+
+	if (closingWrapper) {
+		result = result.slice(0, -(closingWrapper[0]?.length ?? 0));
+
+		// Tool calls indent <param> one level and their multiline value one
+		// additional level. Remove those two wrapper levels from the first
+		// content line only; indentation belonging to the value remains intact.
+		const tagIndent = closingWrapper[1] ?? '';
+		const contentWrapperIndent = tagIndent + tagIndent;
+		if (contentWrapperIndent && result.startsWith(contentWrapperIndent)) {
+			result = result.slice(contentWrapperIndent.length);
+		}
+	}
 
 	return result;
 }
@@ -325,7 +337,7 @@ function parseParams(body: string): Record<string, unknown> {
 	while ((paramMatch = paramPattern.exec(body)) !== null) {
 		const [, paramName, rawValue] = paramMatch;
 		if (!paramName) continue;
-		arguments_[paramName] = stripOuterNewline(rawValue ?? '');
+		arguments_[paramName] = normalizeParamValue(rawValue ?? '');
 	}
 
 	return arguments_;
@@ -441,7 +453,20 @@ export async function executeToolCalls(
 		}
 
 		if (toolRequiresConfirmation(call.name, mode)) {
-			const confirmed = await onConfirm(call);
+			let confirmed: boolean;
+			try {
+				confirmed = await onConfirm(call);
+			} catch (error) {
+				results.push({
+					ok: false,
+					tool_name: call.name,
+					error: `Could not prepare confirmation: ${
+						error instanceof Error ? error.message : String(error)
+					}`,
+				});
+				continue;
+			}
+
 			if (!confirmed) {
 				declined = true;
 				results.push({
@@ -575,23 +600,9 @@ export async function describeToolConfirmation(
 			};
 		}
 		case 'edit_file': {
-			const filePath = await safePath(requestedPath);
-			const content = await fs.readFile(filePath, 'utf8');
+			await safePath(requestedPath);
 			const oldText = stringArgument(call.arguments, 'old_text');
 			const newText = textArgument(call.arguments, 'new_text');
-			const firstIndex = content.indexOf(oldText);
-
-			if (firstIndex === -1) {
-				throw new Error('old_text was not found in the file.');
-			}
-
-			if (content.indexOf(oldText, firstIndex + oldText.length) !== -1) {
-				throw new Error('old_text is not unique in the file.');
-			}
-
-			if (oldText === newText) {
-				throw new Error('The proposed edit does not change the file.');
-			}
 
 			return {
 				title: 'Edit file?',

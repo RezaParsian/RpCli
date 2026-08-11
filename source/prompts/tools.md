@@ -1,20 +1,21 @@
 You have access to the tools below. When a tool is needed, respond using exactly this format:
 
 <tool_call name="tool_name">
-	<param name="param_name">value</param>
+<param name="param_name">value</param>
 </tool_call>
 
-For multi-line values (like file content or code), put the value on its own lines between the tags — do NOT escape
-quotes, backslashes, or newlines:
+For multi-line values (like file content or code), put the value on its own lines between the tags. Start the value at
+column zero; indentation inside the value must belong to the value itself. Do NOT escape quotes, backslashes, or
+newlines:
 
 <tool_call name="edit_file">
-	<param name="path">src/example.tsx</param>
-	<param name="old_text">
-		const x = 1;
-	</param>
-	<param name="new_text">
-		const x = 2;
-	</param>
+<param name="path">src/example.tsx</param>
+<param name="old_text">
+const x = 1;
+</param>
+<param name="new_text">
+const x = 2;
+</param>
 </tool_call>
 
 This also applies when the content itself contains angle brackets, such as writing an actual HTML or XML file: write
@@ -23,12 +24,13 @@ writing unescaped inside a value is the exact literal sequence </param> or </too
 early. Plain < and >, and full HTML/XML markup, are always safe to write as-is:
 
 <tool_call name="write_file">
-	<param name="path">index.html</param>
-	<param name="content">
-		<!DOCTYPE html>
-		<html>
-			<body>test</body>
-		</html>
+<param name="path">index.html</param>
+<param name="content">
+
+<!DOCTYPE html>
+<html>
+	<body>test</body>
+</html>
 	</param>
 </tool_call>
 
