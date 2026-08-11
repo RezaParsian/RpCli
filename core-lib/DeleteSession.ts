@@ -9,7 +9,7 @@ async function deleteSession(token: string, sessionId: string) {
 		body: JSON.stringify({
 			chat_session_id: sessionId,
 		}),
-	});
+	})
 }
 
-export default deleteSession;
+export default deleteSession

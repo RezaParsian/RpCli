@@ -23,13 +23,13 @@ rc -c -a                      Generate a commit message from all changes (HEAD)
 
 ### Options
 
-| Option | Description |
-| --- | --- |
-| `-t`, `--thinking` | Enable thinking for a single prompt. |
-| `-q`, `--quiet` | Hide thinking output. Combine with `-t` as `-tq`. |
-| `-s`, `--search` | Enable web search for a single prompt. |
-| `-c`, `--commit-message` | Generate a commit message from staged changes. |
-| `-a`, `--commit-all` | Use all changes from `HEAD` instead of staged changes. |
+| Option                   | Description                                            |
+| ------------------------ | ------------------------------------------------------ |
+| `-t`, `--thinking`       | Enable thinking for a single prompt.                   |
+| `-q`, `--quiet`          | Hide thinking output. Combine with `-t` as `-tq`.      |
+| `-s`, `--search`         | Enable web search for a single prompt.                 |
+| `-c`, `--commit-message` | Generate a commit message from staged changes.         |
+| `-a`, `--commit-all`     | Use all changes from `HEAD` instead of staged changes. |
 
 To save only the final answer while allowing the model to think:
 
@@ -40,7 +40,8 @@ rc -tq "write documentation for this project" > documentation.md
 ## Modes
 
 **Interactive chat** (`rc` with no arguments)
-Opens a persistent TUI with the logo, message history, and a text input. Stays open until Ctrl+C.
+Opens a persistent TUI with the logo, message history, and a text input. Ctrl+C
+clears non-empty input first; press it again on an empty input to exit.
 The system prompt is sent as soon as interactive mode opens. If the program closes
 before the user sends a message, the unused chat session is deleted automatically.
 Initialization happens silently without replacing the input with a loading indicator.
@@ -48,6 +49,10 @@ Thinking is enabled by default. The status bar shows whether it is on or off; us
 the `/thinking` command to toggle it. Thinking and final responses are displayed
 as separate messages. Web search is disabled by default; use `/search` to toggle
 it. The status bar displays the current state of both features.
+
+The input supports forward Delete, Ctrl+Backspace and Ctrl+Delete for word
+deletion, and Ctrl+Left/Right for word navigation. Alt+Backspace and Alt+Delete
+are disabled.
 
 **Single prompt** (`rc "..."`)
 Sends one question, renders the response as formatted markdown, then exits.

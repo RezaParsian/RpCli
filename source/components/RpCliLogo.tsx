@@ -1,16 +1,16 @@
-import os from 'os';
-import React from 'react';
-import {Box, Text, useWindowSize} from 'ink';
-import Gradient from 'ink-gradient';
-import BigText from 'ink-big-text';
+import os from 'os'
+import React from 'react'
+import { Box, Text, useWindowSize } from 'ink'
+import Gradient from 'ink-gradient'
+import BigText from 'ink-big-text'
 
 type Props = {
-	version?: string;
-};
+	version?: string
+}
 
-export default function RpCliLogo({version}: Props) {
-	const {columns} = useWindowSize();
-	const cwd = process.cwd().replace(os.homedir(), '~');
+export default function RpCliLogo({ version }: Props) {
+	const { columns } = useWindowSize()
+	const cwd = process.cwd().replace(os.homedir(), '~')
 
 	return (
 		<Box alignItems="center" marginY={1}>
@@ -39,5 +39,5 @@ export default function RpCliLogo({version}: Props) {
 				</Box>
 			</Gradient>
 		</Box>
-	);
+	)
 }

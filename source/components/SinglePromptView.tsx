@@ -1,56 +1,41 @@
-import React, {useCallback, useEffect, useState} from 'react';
-import {Box, Text, useApp} from 'ink';
-import Spinner from './Spinner.js';
-import MarkdownText from './MarkdownText.js';
-import {ToolConfirmation, useToolConfirmation} from './ToolConfirmation.js';
-import {hideStreamingToolCalls} from '../tools/index.js';
-import deleteSession from "../../core-lib/DeleteSession.js";
-import {isInvalidTokenError} from "../../core-lib/InvalidTokenError.js";
-import {CHAT_SYSTEM_PROMPT, getAIResponse} from "../actions/agent.js";
+import React, { useCallback, useEffect, useState } from 'react'
+import { Box, Text, useApp } from 'ink'
+import Spinner from './Spinner.js'
+import MarkdownText from './MarkdownText.js'
+import { ToolConfirmation, useToolConfirmation } from './ToolConfirmation.js'
+import { hideStreamingToolCalls } from '../tools/index.js'
+import deleteSession from '../../core-lib/DeleteSession.js'
+import { isInvalidTokenError } from '../../core-lib/InvalidTokenError.js'
+import { CHAT_SYSTEM_PROMPT, getAIResponse } from '../actions/agent.js'
 
-type State = 'loading' | 'done' | 'error';
+type State = 'loading' | 'done' | 'error'
 
 type Props = {
-	prompt: string;
-	thinking: boolean;
-	quiet: boolean;
-	search: boolean;
-	token: string;
-	onInvalidToken: () => void;
-};
+	prompt: string
+	thinking: boolean
+	quiet: boolean
+	search: boolean
+	token: string
+	onInvalidToken: () => void
+}
 
-export default function SinglePromptView({
-	prompt,
-	thinking,
-	quiet,
-	search,
-	token,
-	onInvalidToken,
-}: Props) {
-	const {exit} = useApp();
-	const [state, setState] = useState<State>('loading');
-	const [response, setResponse] = useState('');
-	const [thinkingResponse, setThinkingResponse] = useState('');
-	const [error, setError] = useState('');
-	const [toolMessages, setToolMessages] = useState<string[]>([]);
-	const {pending, confirmTool} = useToolConfirmation();
+export default function SinglePromptView({ prompt, thinking, quiet, search, token, onInvalidToken }: Props) {
+	const { exit } = useApp()
+	const [state, setState] = useState<State>('loading')
+	const [response, setResponse] = useState('')
+	const [thinkingResponse, setThinkingResponse] = useState('')
+	const [error, setError] = useState('')
+	const [toolMessages, setToolMessages] = useState<string[]>([])
+	const { pending, confirmTool } = useToolConfirmation()
 	const handleToolMessage = useCallback((content: string) => {
-		setToolMessages(previous => [...previous, content]);
-	}, []);
+		setToolMessages((previous) => [...previous, content])
+	}, [])
 
 	useEffect(() => {
-		let streamedResponse = '';
+		let streamedResponse = ''
 		void (async () => {
 			try {
-				await getAIResponse(
-					token,
-					CHAT_SYSTEM_PROMPT,
-					undefined,
-					undefined,
-					thinking,
-					undefined,
-					search,
-				);
+				await getAIResponse(token, CHAT_SYSTEM_PROMPT, undefined, undefined, thinking, undefined, search)
 
 				const fullResponse = await getAIResponse(
 					token,
@@ -58,55 +43,46 @@ export default function SinglePromptView({
 					confirmTool,
 					handleToolMessage,
 					thinking,
-					chunk => {
+					(chunk) => {
 						if (chunk.type === 'thinking') {
-							setThinkingResponse(previous => previous + chunk.content);
+							setThinkingResponse((previous) => previous + chunk.content)
 						} else {
-							streamedResponse += chunk.content;
-							setResponse(hideStreamingToolCalls(streamedResponse));
+							streamedResponse += chunk.content
+							setResponse(hideStreamingToolCalls(streamedResponse))
 						}
 					},
-					search,
-				);
+					search
+				)
 
-				deleteSession(token, fullResponse.sessionId);
+				deleteSession(token, fullResponse.sessionId)
 
-				setResponse(fullResponse.content ?? 'Ai Error!');
-				setThinkingResponse(fullResponse.thinkingContent ?? '');
-				setState('done');
+				setResponse(fullResponse.content ?? 'Ai Error!')
+				setThinkingResponse(fullResponse.thinkingContent ?? '')
+				setState('done')
 			} catch (err) {
 				if (isInvalidTokenError(err)) {
-					onInvalidToken();
-					return;
+					onInvalidToken()
+					return
 				}
-				console.log({err});
-				setError(err instanceof Error ? err.message : String(err));
-				setState('error');
+				console.log({ err })
+				setError(err instanceof Error ? err.message : String(err))
+				setState('error')
 			}
-		})();
-	}, [
-		prompt,
-		thinking,
-		quiet,
-		search,
-		token,
-		confirmTool,
-		handleToolMessage,
-		onInvalidToken,
-	]);
+		})()
+	}, [prompt, thinking, quiet, search, token, confirmTool, handleToolMessage, onInvalidToken])
 
 	useEffect(() => {
-		if (state !== 'done' && state !== 'error') return;
-		const timer = setTimeout(() => exit(), 100);
-		return () => clearTimeout(timer);
-	}, [state, exit]);
+		if (state !== 'done' && state !== 'error') return
+		const timer = setTimeout(() => exit(), 100)
+		return () => clearTimeout(timer)
+	}, [state, exit])
 
 	if (state === 'error') {
 		return (
 			<Text color="red" bold>
 				✖ Error: {error}
 			</Text>
-		);
+		)
 	}
 
 	return (
@@ -134,5 +110,5 @@ export default function SinglePromptView({
 				<Spinner text="Thinking..." />
 			)}
 		</Box>
-	);
+	)
 }

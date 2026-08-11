@@ -1,6 +1,6 @@
 {
 	"name": "@rezaparsian/rp-cli",
-	"version": "0.3.3",
+	"version": "0.3.4",
 	"description": "AI-powered CLI — interactive chat, single prompts, and git commit message generation",
 	"license": "MIT",
 	"author": {
@@ -38,7 +38,8 @@
 		"build": "tsc && node scripts/copy-prompts.mjs",
 		"dev": "node scripts/copy-prompts.mjs && tsc --watch",
 		"prepublishOnly": "pnpm run build",
-		"test": "prettier --check . && xo && ava"
+		"test": "prettier --check . && xo && ava",
+		"format": "prettier --write ."
 	},
 	"dependencies": {
 		"@rezaparsian/deepseek-pow-solver": "^1.0.1",
@@ -86,5 +87,10 @@
 			"react/prop-types": "off"
 		}
 	},
-	"prettier": "@vdemedes/prettier-config"
+	"prettier": {
+		"singleQuote": true,
+		"semi": false,
+		"tabWidth": 4,
+		"printWidth": 130
+	}
 }

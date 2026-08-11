@@ -1,16 +1,16 @@
 #!/usr/bin/env node
-import React from 'react';
-import {render} from 'ink';
-import meow from 'meow';
-import dotenv from 'dotenv';
-import {tokenConfigPath} from "./core/TokenConfig.js";
+import React from 'react'
+import { render } from 'ink'
+import meow from 'meow'
+import dotenv from 'dotenv'
+import { tokenConfigPath } from './core/TokenConfig.js'
 
 dotenv.config({
 	path: tokenConfigPath,
 	quiet: true,
-});
+})
 
-const {default: App} = await import('./app.js');
+const { default: App } = await import('./app.js')
 
 const cli = meow(
 	`
@@ -42,22 +42,18 @@ const cli = meow(
 	{
 		importMeta: import.meta,
 		flags: {
-			commitMessage: {type: 'boolean', shortFlag: 'c'},
-			commitAll: {type: 'boolean', shortFlag: 'a'},
-			thinking: {type: 'boolean', shortFlag: 't'},
-			quiet: {type: 'boolean', shortFlag: 'q'},
-			search: {type: 'boolean', shortFlag: 's'},
+			commitMessage: { type: 'boolean', shortFlag: 'c' },
+			commitAll: { type: 'boolean', shortFlag: 'a' },
+			thinking: { type: 'boolean', shortFlag: 't' },
+			quiet: { type: 'boolean', shortFlag: 'q' },
+			search: { type: 'boolean', shortFlag: 's' },
 		},
-	},
-);
+	}
+)
 
-const prompt = cli.input.join(' ').trim();
+const prompt = cli.input.join(' ').trim()
 
-const mode = cli.flags.commitMessage
-	? 'commit'
-	: prompt
-		? 'prompt'
-		: 'interactive';
+const mode = cli.flags.commitMessage ? 'commit' : prompt ? 'prompt' : 'interactive'
 
 render(
 	<App
@@ -69,5 +65,8 @@ render(
 		search={cli.flags.search ?? false}
 		version={cli.pkg.version}
 	/>,
-	{kittyKeyboard: {mode: 'enabled'}},
-);
+	{
+		exitOnCtrlC: false,
+		kittyKeyboard: { mode: 'enabled' },
+	}
+)

@@ -1,14 +1,10 @@
 interface ContinueChatProps {
-	token: string;
-	sessionId: string;
-	messageId: number;
+	token: string
+	sessionId: string
+	messageId: number
 }
 
-export default async function continueChat({
-	token,
-	sessionId,
-	messageId,
-}: ContinueChatProps): Promise<Response> {
+export default async function continueChat({ token, sessionId, messageId }: ContinueChatProps): Promise<Response> {
 	return fetch('https://chat.deepseek.com/api/v0/chat/continue', {
 		method: 'POST',
 		headers: {
@@ -20,5 +16,5 @@ export default async function continueChat({
 			message_id: messageId,
 			fallback_to_resume: true,
 		}),
-	});
+	})
 }

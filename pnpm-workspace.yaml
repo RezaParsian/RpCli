@@ -1,2 +1,2 @@
 minimumReleaseAgeExclude:
-  - '@rezaparsian/deepseek-pow-solver@1.0.0 || 1.0.1'
+    - '@rezaparsian/deepseek-pow-solver@1.0.0 || 1.0.1'
