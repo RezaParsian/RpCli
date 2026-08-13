@@ -9,7 +9,7 @@ import {
 	type ChatResult,
 	type ChatStreamChunk,
 } from '../../core-lib/index.js'
-import logFn from './LogChat.js'
+import logChat, { isChatLoggingEnabled } from './LogChat.js'
 
 let sessionId = process.env['DEEPSEEK_SESSION_ID']
 let parentMessageId: number | null = process.env['DEEPSEEK_MESSAGE_ID'] ? Number(process.env['DEEPSEEK_MESSAGE_ID']) : null
@@ -19,6 +19,15 @@ let lastStreamMessageId: number | null = null
 const EMPTY_RESPONSE_PROMPT =
 	'Your previous message contained only thinking and no visible response. Please provide the final answer now.'
 const MAX_EMPTY_RESPONSE_RETRIES = 2
+
+export type SendMessageOptions = {
+	token: string
+	prompt: string
+	thinkingEnabled?: boolean
+	searchEnabled?: boolean
+	onChunk?: (chunk: ChatStreamChunk) => void
+	emptyResponseRetryCount?: number
+}
 
 export function beginGeneration(): AbortSignal {
 	generationAbort = new AbortController()
@@ -47,14 +56,14 @@ export function resetChatSession(): void {
 	lastStreamMessageId = null
 }
 
-export default async function sendMessage(
-	token: string,
-	prompt: string,
+export default async function sendMessage({
+	token,
+	prompt,
 	thinkingEnabled = true,
-	onChunk?: (chunk: ChatStreamChunk) => void,
 	searchEnabled = false,
-	emptyResponseRetryCount = 0
-): Promise<ChatResult> {
+	onChunk,
+	emptyResponseRetryCount = 0,
+}: SendMessageOptions): Promise<ChatResult> {
 	if (generationAbort?.signal.aborted) {
 		return {
 			ok: true,
@@ -117,7 +126,7 @@ export default async function sendMessage(
 
 			onChunk?.(chunk)
 		},
-		logFn,
+		logFn: isChatLoggingEnabled() ? logChat : undefined,
 	})
 
 	if (!res.ok) {
@@ -130,7 +139,14 @@ export default async function sendMessage(
 		}
 
 		if (!res.content?.trim() && res.thinkingContent?.trim() && emptyResponseRetryCount < MAX_EMPTY_RESPONSE_RETRIES) {
-			return sendMessage(token, EMPTY_RESPONSE_PROMPT, thinkingEnabled, onChunk, searchEnabled, emptyResponseRetryCount + 1)
+			return sendMessage({
+				token,
+				prompt: EMPTY_RESPONSE_PROMPT,
+				thinkingEnabled,
+				searchEnabled,
+				onChunk,
+				emptyResponseRetryCount: emptyResponseRetryCount + 1,
+			})
 		}
 
 		return res

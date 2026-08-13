@@ -11,9 +11,9 @@ export function getGitDiff(useAll: boolean): string {
 }
 
 export async function generateCommitMessage(diff: string, token: string): Promise<string> {
-	await getAIResponse(token, GitCommitMessage())
+	await getAIResponse({ token, prompt: GitCommitMessage() })
 
-	const response = await getAIResponse(token, `Here is the git diff:\n\n${diff}`)
+	const response = await getAIResponse({ token, prompt: `Here is the git diff:\n\n${diff}` })
 
 	await deleteSession(token, response.sessionId)
 

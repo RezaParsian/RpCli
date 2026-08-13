@@ -10,11 +10,12 @@ import FzfFilePicker, { createMentionEntries } from './FzfFilePicker.js'
 import SlashCommandPicker from './SlashCommandPicker.js'
 import { formatSlashCommandHelp, resolveSlashCommand, type SlashCommand } from '../commands/index.js'
 import { hideStreamingToolCalls } from '../tools/index.js'
-import { InitPrompt, readAgentsMarkdown } from '../prompts/index.js'
+import { ContinuePrompt, InitPrompt, readAgentsMarkdown } from '../prompts/index.js'
 import { deleteSession, isInvalidTokenError } from '../../core-lib/index.js'
 import listWorkspaceFiles from '../core/ListWorkspaceFiles.js'
-import { getChatSystemPrompt, getAIResponse } from '../actions/agent.js'
+import { getChatSystemPrompt, getAIResponse, type ChatMode } from '../actions/agent.js'
 import sendMessage, { resetChatSession, stopCurrentGeneration } from '../core/apiClient.js'
+import { chatLogDirectory, isChatLoggingEnabled, setChatLoggingEnabled } from '../core/LogChat.js'
 
 function mentionQuery(value: string): string | undefined {
 	const match = /(?:^|\s)@([^\s@]*)$/.exec(value)
@@ -200,13 +201,15 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 
 	const [searchEnabled, setSearchEnabled] = useState(false)
 
+	const [loggingEnabled, setLoggingEnabled] = useState(() => isChatLoggingEnabled())
+
 	const [mentionEntries, setMentionEntries] = useState<string[]>([])
 
 	const [filePickerOpen, setFilePickerOpen] = useState(false)
 
 	const [commandPickerOpen, setCommandPickerOpen] = useState(false)
 
-	const [mode, setMode] = useState<'plan' | 'normal' | 'yolo'>('normal')
+	const [mode, setMode] = useState<ChatMode>('normal')
 
 	const sessionId = useRef<string | undefined>(undefined)
 
@@ -404,7 +407,7 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 		initializationSucceeded.current = false
 		initialization.current = (async () => {
 			try {
-				const response = await getAIResponse(token, getChatSystemPrompt())
+				const response = await getAIResponse({ token, prompt: getChatSystemPrompt() })
 
 				if (generation !== sessionGeneration.current) {
 					if (response.sessionId) {
@@ -449,6 +452,20 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 			command.execute({
 				init() {
 					handleSubmitRef.current(InitPrompt(), { addToHistory: false, reloadAgentsAfter: true })
+				},
+
+				continueTask() {
+					if (loading) return
+
+					setMessages((previous) => [
+						...previous,
+						{
+							id: `console-${Date.now()}-${Math.random()}`,
+							role: 'console',
+							content: 'Continuing previous work…',
+						},
+					])
+					handleSubmitRef.current(ContinuePrompt(), { addToHistory: false })
 				},
 
 				clear() {
@@ -514,6 +531,28 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 								id: `console-${Date.now()}-${Math.random()}`,
 								role: 'console',
 								content: `Search ${enabled ? 'enabled' : 'disabled'}.`,
+							},
+						])
+
+						setInput('')
+
+						return enabled
+					})
+				},
+
+				toggleLogging() {
+					setLoggingEnabled((current) => {
+						const enabled = !current
+						void setChatLoggingEnabled(enabled)
+
+						setMessages((previous) => [
+							...previous,
+							{
+								id: `console-${Date.now()}-${Math.random()}`,
+								role: 'console',
+								content: enabled
+									? `Logging enabled. Transcripts are saved in ${chatLogDirectory}.`
+									: 'Logging disabled.',
 							},
 						])
 
@@ -670,14 +709,11 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 						return
 					}
 
-					const fullResponse = await getAIResponse(
+					const fullResponse = await getAIResponse({
 						token,
-
-						userMessage.content,
-
+						prompt: userMessage.content,
 						confirmTool,
-
-						(content) => {
+						onToolMessage: (content) => {
 							appendLiveMessage({
 								id: `console-${Date.now()}-${Math.random()}`,
 								role: 'console',
@@ -686,10 +722,8 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 
 							scheduleFlush()
 						},
-
 						thinkingEnabled,
-
-						(chunk) => {
+						onChunk: (chunk) => {
 							if (chunk.type === 'response') {
 								const messageKey = String(chunk.messageId ?? 'pending')
 
@@ -738,10 +772,9 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 								scheduleFlush()
 							}
 						},
-
 						searchEnabled,
-						mode
-					)
+						mode,
+					})
 
 					if (throttleTimer) {
 						clearTimeout(throttleTimer)
@@ -775,13 +808,12 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 
 						if (agents) {
 							try {
-								await sendMessage(
+								await sendMessage({
 									token,
-									`AGENTS.md is now the project-specific ground truth for this session. Follow it unless the user asks otherwise.\n\n${agents}`,
+									prompt: `AGENTS.md is now the project-specific ground truth for this session. Follow it unless the user asks otherwise.\n\n${agents}`,
 									thinkingEnabled,
-									undefined,
-									searchEnabled
-								)
+									searchEnabled,
+								})
 
 								if (!unmounted.current) {
 									setMessages((previous) => [
@@ -878,6 +910,14 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 										{thinkingEnabled ? 'ON' : 'OFF'}
 									</Text>{' '}
 									<Text dimColor>(/thinking)</Text>
+								</Text>
+
+								<Text>
+									Log:{' '}
+									<Text color={loggingEnabled ? 'green' : 'red'} bold>
+										{loggingEnabled ? 'ON' : 'OFF'}
+									</Text>{' '}
+									<Text dimColor>(/logging)</Text>
 								</Text>
 							</Box>
 						</Box>

@@ -34,15 +34,20 @@ export default function SinglePromptView({ prompt, thinking, quiet, search, toke
 		let streamedResponse = ''
 		void (async () => {
 			try {
-				await getAIResponse(token, getChatSystemPrompt(), undefined, undefined, thinking, undefined, search)
+				await getAIResponse({
+					token,
+					prompt: getChatSystemPrompt(),
+					thinkingEnabled: thinking,
+					searchEnabled: search,
+				})
 
-				const fullResponse = await getAIResponse(
+				const fullResponse = await getAIResponse({
 					token,
 					prompt,
 					confirmTool,
-					handleToolMessage,
-					thinking,
-					(chunk) => {
+					onToolMessage: handleToolMessage,
+					thinkingEnabled: thinking,
+					onChunk: (chunk) => {
 						if (chunk.type === 'thinking') {
 							setThinkingResponse((previous) => previous + chunk.content)
 						} else {
@@ -50,8 +55,8 @@ export default function SinglePromptView({ prompt, thinking, quiet, search, toke
 							setResponse(hideStreamingToolCalls(streamedResponse))
 						}
 					},
-					search
-				)
+					searchEnabled: search,
+				})
 
 				deleteSession(token, fullResponse.sessionId)
 
@@ -63,7 +68,6 @@ export default function SinglePromptView({ prompt, thinking, quiet, search, toke
 					onInvalidToken()
 					return
 				}
-				console.log({ err })
 				setError(err instanceof Error ? err.message : String(err))
 				setState('error')
 			}

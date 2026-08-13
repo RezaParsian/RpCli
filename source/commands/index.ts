@@ -2,7 +2,9 @@ export type SlashCommandContext = {
 	exit: () => void
 	toggleThinking: () => void
 	toggleSearch: () => void
+	toggleLogging: () => void
 	init: () => void
+	continueTask: () => void
 	clear: () => void
 	help: () => void
 }
@@ -21,6 +23,13 @@ export const slashCommands: SlashCommand[] = [
 		description: 'Generate AGENTS.md for this repository',
 		execute: ({ init }) => {
 			init()
+		},
+	},
+	{
+		name: '/continue',
+		description: 'Keep working on the previous task after the tool-round limit',
+		execute({ continueTask }) {
+			continueTask()
 		},
 	},
 	{
@@ -49,6 +58,14 @@ export const slashCommands: SlashCommand[] = [
 		description: 'Toggle thinking on or off',
 		execute({ toggleThinking }) {
 			toggleThinking()
+		},
+	},
+	{
+		name: '/logging',
+		aliases: ['/log'],
+		description: 'Toggle saving chat transcripts to disk',
+		execute({ toggleLogging }) {
+			toggleLogging()
 		},
 	},
 	{

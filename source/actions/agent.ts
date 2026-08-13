@@ -3,6 +3,19 @@ import { SystemPrompt } from '../prompts/index.js'
 import { executeToolCalls, formatToolActivityMessage, parseToolCalls, type ToolCall, type ToolResult } from '../tools/index.js'
 import { type ChatResult, type ChatStreamChunk } from '../../core-lib/index.js'
 
+export type ChatMode = 'plan' | 'normal' | 'yolo'
+
+export type AIResponseOptions = {
+	token: string
+	prompt: string
+	confirmTool?: (call: ToolCall) => Promise<boolean>
+	onToolMessage?: (content: string) => void
+	thinkingEnabled?: boolean
+	onChunk?: (chunk: ChatStreamChunk) => void
+	searchEnabled?: boolean
+	mode?: ChatMode
+}
+
 export function getChatSystemPrompt(): string {
 	return SystemPrompt()
 }
@@ -18,19 +31,35 @@ function formatResultsMessage(results: ToolResult[]): string {
 	return `${blocks}\nUse these results to continue answering the user's request.`
 }
 
-export async function getAIResponse(
-	token: string,
-	messages: string,
-	confirmTool?: (call: ToolCall) => Promise<boolean>,
-	onToolMessage?: (content: string) => void,
+const MAX_TOOL_ROUNDS = 10
+
+function toolRoundLimitMessage(): string {
+	return `Stopped after ${MAX_TOOL_ROUNDS} tool rounds. Type /continue to keep going.`
+}
+
+export async function getAIResponse({
+	token,
+	prompt,
+	confirmTool,
+	onToolMessage,
 	thinkingEnabled = true,
-	onChunk?: (chunk: ChatStreamChunk) => void,
+	onChunk,
 	searchEnabled = false,
-	mode: 'plan' | 'normal' | 'yolo' = 'normal'
-): Promise<ChatResult> {
+	mode = 'normal',
+}: AIResponseOptions): Promise<ChatResult> {
 	beginGeneration()
 
-	let response = await sendMessage(token, messages, thinkingEnabled, onChunk, searchEnabled)
+	const send = (nextPrompt: string) =>
+		sendMessage({
+			token,
+			prompt: nextPrompt,
+			thinkingEnabled,
+			searchEnabled,
+			onChunk,
+		})
+
+	let response = await send(prompt)
+	let toolRounds = 0
 
 	while (true) {
 		if (response.stopped || isGenerationStopped()) return response
@@ -40,26 +69,36 @@ export async function getAIResponse(
 		try {
 			toolCalls = parseToolCalls(response.content || '')
 		} catch (error) {
-			response = await sendMessage(
-				token,
+			if (toolRounds >= MAX_TOOL_ROUNDS) {
+				onToolMessage?.(toolRoundLimitMessage())
+				return response
+			}
+
+			toolRounds += 1
+			response = await send(
 				`The tool call could not be parsed: ${
 					error instanceof Error ? error.message : String(error)
-				}. Send a corrected tool call or answer without a tool.`,
-				thinkingEnabled,
-				onChunk,
-				searchEnabled
+				}. Send a corrected tool call or answer without a tool.`
 			)
 			continue
 		}
 
 		if (toolCalls.length === 0) return response
 
+		if (toolRounds >= MAX_TOOL_ROUNDS) {
+			onToolMessage?.(toolRoundLimitMessage())
+			return send(
+				'Maximum tool call rounds reached. Summarize what you finished and what remains. Do not use tools. Tell the user they can type /continue to keep working.'
+			)
+		}
+
+		toolRounds += 1
 		onToolMessage?.(formatToolActivityMessage(response.content ?? '', toolCalls))
 
 		const results = await executeToolCalls(toolCalls, async (call) => (confirmTool ? confirmTool(call) : false), mode)
 
 		if (isGenerationStopped()) return response
 
-		response = await sendMessage(token, formatResultsMessage(results), thinkingEnabled, onChunk, searchEnabled)
+		response = await send(formatResultsMessage(results))
 	}
 }

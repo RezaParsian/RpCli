@@ -63,7 +63,7 @@ export default function TokenSetupView({ onTokenSaved }: Props) {
 				<Text color="yellow">Saving token...</Text>
 			) : status === 'saved' ? (
 				<Text color="green" bold>
-					✓ Token saved. Run RP-CLI again to continue.
+					✓ Token saved.
 				</Text>
 			) : (
 				<Text color="red">✖ Could not save token: {error}</Text>

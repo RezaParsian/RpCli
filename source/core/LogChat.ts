@@ -1,20 +1,40 @@
-import { tokenConfigDirectory } from './TokenConfig.js'
+import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import * as fs from 'node:fs'
+import { chatLoggingEnvName, saveChatLoggingPreference, tokenConfigDirectory } from './TokenConfig.js'
 
-export default function LogChat(logData: { [key: string]: any; sessionId: string }) {
-	const logDir = path.join(tokenConfigDirectory, 'logs')
+export const chatLogDirectory = path.join(tokenConfigDirectory, 'logs')
 
-	if (!fs.existsSync(logDir)) {
-		fs.mkdirSync(logDir, { recursive: true })
+function envFlag(name: string): boolean {
+	const value = process.env[name]?.trim().toLowerCase()
+	return value === '1' || value === 'true' || value === 'yes'
+}
+
+let loggingEnabled = envFlag(chatLoggingEnvName)
+
+export function isChatLoggingEnabled(): boolean {
+	return loggingEnabled
+}
+
+export async function setChatLoggingEnabled(enabled: boolean): Promise<void> {
+	loggingEnabled = enabled
+	process.env[chatLoggingEnvName] = enabled ? '1' : ''
+	await saveChatLoggingPreference(enabled)
+}
+
+export default function logChat(logData: { [key: string]: unknown; sessionId: string }): void {
+	if (!isChatLoggingEnabled()) return
+
+	void writeChatLog(logData)
+}
+
+async function writeChatLog(logData: { [key: string]: unknown; sessionId: string }): Promise<void> {
+	try {
+		const logDir = path.join(chatLogDirectory, logData.sessionId)
+		await mkdir(logDir, { recursive: true, mode: 0o700 })
+		const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+		const logFile = path.join(logDir, `chat_${timestamp}.json`)
+		await writeFile(logFile, JSON.stringify(logData, null, 2), { mode: 0o600 })
+	} catch {
+		// Logging must never interrupt chat.
 	}
-
-	if (!fs.existsSync(path.join(logDir, logData.sessionId))) {
-		fs.mkdirSync(path.join(logDir, logData.sessionId))
-	}
-
-	const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-	const logFile = path.join(logDir, logData.sessionId, `chat_${timestamp}.json`)
-
-	fs.writeFileSync(logFile, JSON.stringify(logData, null, 2))
 }
