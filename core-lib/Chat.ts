@@ -18,6 +18,7 @@ interface ChatProps {
 	parentMessageId: number | null
 	onChunk?: (chunk: ChatStreamChunk) => void
 	logFn?: (data: { [key: string]: any; sessionId: string }) => void
+	signal?: AbortSignal
 }
 
 export interface ChatResult {
@@ -35,12 +36,29 @@ export interface ChatResult {
 	insertedAt?: string | null
 	updatedAt?: string | null
 	finished?: boolean
+	stopped?: boolean
 	error?: string
 	bizCode?: number
 	raw?: any
 }
 
 const MAX_CONTINUATIONS = 10
+
+function isAbortError(error: unknown): boolean {
+	return error instanceof Error && error.name === 'AbortError'
+}
+
+function stoppedResult(sessionId: string): ChatResult {
+	return {
+		ok: true,
+		sessionId,
+		content: '',
+		thinkingContent: '',
+		messageId: null,
+		finished: true,
+		stopped: true,
+	}
+}
 
 export default async function chat({
 	token,
@@ -53,29 +71,39 @@ export default async function chat({
 	prompt,
 	onChunk,
 	logFn,
+	signal,
 }: ChatProps): Promise<ChatResult> {
 	if (thinking_enabled && model_type === 'vision') throw new Error('This feature is not available for vision models')
 	if (search_enabled && model_type !== 'default') throw new Error('Search is only supported in default model mode')
 
-	let response = await fetch('https://chat.deepseek.com/api/v0/chat/completion', {
-		method: 'POST',
-		headers: {
-			'x-ds-pow-response': challenge,
-			'content-type': 'application/json',
-			authorization: 'Bearer ' + token,
-		},
-		body: JSON.stringify({
-			chat_session_id: sessionId,
-			parent_message_id: parentMessageId,
-			model_type,
-			prompt,
-			thinking_enabled,
-			search_enabled,
-			ref_file_ids: [],
-			action: null,
-			preempt: false,
-		}),
-	})
+	let response: Response
+	try {
+		response = await fetch('https://chat.deepseek.com/api/v0/chat/completion', {
+			method: 'POST',
+			signal,
+			headers: {
+				'x-ds-pow-response': challenge,
+				'content-type': 'application/json',
+				authorization: 'Bearer ' + token,
+			},
+			body: JSON.stringify({
+				chat_session_id: sessionId,
+				parent_message_id: parentMessageId,
+				model_type,
+				prompt,
+				thinking_enabled,
+				search_enabled,
+				ref_file_ids: [],
+				action: null,
+				preempt: false,
+			}),
+		})
+	} catch (error) {
+		if (isAbortError(error) || signal?.aborted) {
+			return stoppedResult(sessionId)
+		}
+		throw error
+	}
 	assertValidTokenResponse(response)
 
 	const contentType = response.headers.get('content-type')
@@ -121,6 +149,7 @@ export default async function chat({
 		insertedAt: null,
 		updatedAt: null,
 		finished: false,
+		stopped: false,
 	}
 
 	const rawEvents: any[] = []
@@ -142,7 +171,20 @@ export default async function chat({
 		let buffer = ''
 
 		while (true) {
-			const { done, value } = await reader.read()
+			let done: boolean
+			let value: Uint8Array | undefined
+
+			try {
+				;({ done, value } = await reader.read())
+			} catch (error) {
+				if (isAbortError(error) || signal?.aborted) {
+					result.stopped = true
+					result.finished = true
+					break
+				}
+
+				throw error
+			}
 
 			if (done) break
 
@@ -281,6 +323,7 @@ export default async function chat({
 			} catch {}
 		}
 
+		if (result.stopped) break
 		if (result.status !== 'INCOMPLETE') break
 		if (typeof result.messageId !== 'number') {
 			return {
@@ -298,11 +341,22 @@ export default async function chat({
 		}
 
 		continuationCount += 1
-		response = await continueChat({
-			token,
-			sessionId,
-			messageId: result.messageId,
-		})
+		try {
+			response = await continueChat({
+				token,
+				sessionId,
+				messageId: result.messageId,
+				signal,
+			})
+		} catch (error) {
+			if (isAbortError(error) || signal?.aborted) {
+				result.stopped = true
+				result.finished = true
+				break
+			}
+
+			throw error
+		}
 		assertValidTokenResponse(response)
 
 		const continuationContentType = response.headers.get('content-type')

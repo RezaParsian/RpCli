@@ -1,4 +1,4 @@
-import sendMessage from '../core/apiClient.js'
+import sendMessage, { beginGeneration, isGenerationStopped } from '../core/apiClient.js'
 import { SystemPrompt } from '../prompts/index.js'
 import { executeToolCalls, formatToolActivityMessage, parseToolCalls, type ToolCall, type ToolResult } from '../tools/index.js'
 import { ChatResult, ChatStreamChunk } from '../../core-lib/Chat.js'
@@ -26,9 +26,13 @@ export async function getAIResponse(
 	searchEnabled = false,
 	mode: 'plan' | 'normal' | 'yolo' = 'normal'
 ): Promise<ChatResult> {
+	beginGeneration()
+
 	let response = await sendMessage(token, messages, thinkingEnabled, onChunk, searchEnabled)
 
 	while (true) {
+		if (response.stopped || isGenerationStopped()) return response
+
 		let toolCalls: ToolCall[]
 
 		try {
@@ -51,6 +55,8 @@ export async function getAIResponse(
 		onToolMessage?.(formatToolActivityMessage(response.content ?? '', toolCalls))
 
 		const results = await executeToolCalls(toolCalls, async (call) => (confirmTool ? confirmTool(call) : false), mode)
+
+		if (isGenerationStopped()) return response
 
 		response = await sendMessage(token, formatResultsMessage(results), thinkingEnabled, onChunk, searchEnabled)
 	}

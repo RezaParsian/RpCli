@@ -17,6 +17,7 @@ import { isInvalidTokenError } from '../../core-lib/InvalidTokenError.js'
 import listWorkspaceFiles from '../../core-lib/ListWorkspaceFiles.js'
 import deleteSession from '../../core-lib/DeleteSession.js'
 import { CHAT_SYSTEM_PROMPT, getAIResponse } from '../actions/agent.js'
+import { stopCurrentGeneration } from '../core/apiClient.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -116,6 +117,15 @@ type Message = {
 	content: string
 }
 
+function loadingSpinnerText(streamingMessages: Message[]): string {
+	const role = streamingMessages[streamingMessages.length - 1]?.role
+
+	if (role === 'assistant') return 'Writing... Esc to stop'
+	if (role === 'console') return 'Running tools... Esc to stop'
+
+	return 'Thinking... Esc to stop'
+}
+
 type Props = {
 	version?: string
 	token: string
@@ -206,6 +216,7 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 	const hasUserMessage = useRef(false)
 	const unmounted = useRef(false)
 	const sessionDeleted = useRef(false)
+	const stopRequested = useRef(false)
 
 	const { pending, confirmTool } = useToolConfirmation()
 
@@ -231,7 +242,23 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 	const commandQuery = slashCommandQuery(input) ?? ''
 
 	useInput((pressedInput, key) => {
+		if (key.escape && loading) {
+			stopRequested.current = true
+			if (initializationSucceeded.current) {
+				void stopCurrentGeneration(token)
+			}
+			return
+		}
+
 		if (!key.ctrl || pressedInput.toLowerCase() !== 'c') return
+
+		if (loading) {
+			stopRequested.current = true
+			if (initializationSucceeded.current) {
+				void stopCurrentGeneration(token)
+			}
+			return
+		}
 
 		if (input.length > 0) {
 			setInput('')
@@ -527,6 +554,7 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 			setInput('')
 			setCursorPosition([0, 0])
 			setLoading(true)
+			stopRequested.current = false
 
 			setStreamingMessages([])
 
@@ -595,7 +623,7 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 				try {
 					await initialization.current
 
-					if (!initializationSucceeded.current) {
+					if (stopRequested.current || !initializationSucceeded.current) {
 						return
 					}
 
@@ -708,6 +736,11 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 						setMessages((previous) => [...previous, ...liveMessages])
 					}
 
+					if (stopRequested.current || (error instanceof Error && error.name === 'AbortError')) {
+						setStreamingMessages([])
+						return
+					}
+
 					setMessages((previous) => [
 						...previous,
 						{
@@ -746,7 +779,7 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 				{pending ? (
 					<ToolConfirmation details={pending.details} />
 				) : loading ? (
-					<Spinner text="Thinking..." />
+					<Spinner text={loadingSpinnerText(streamingMessages)} />
 				) : (
 					<Box flexDirection="column">
 						<Box justifyContent="space-between" paddingX={1}>
