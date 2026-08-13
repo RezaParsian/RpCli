@@ -18,47 +18,50 @@ const x = 2;
 </param>
 </tool_call>
 
-This also applies when the content itself contains angle brackets, such as writing an actual HTML or XML file: write
-the literal characters < and > exactly as they are — do NOT convert them to &lt; and &gt;. The only thing to avoid
-writing unescaped inside a value is the exact literal sequence </param> or </tool_call>, since that would end the tag
-early. Plain < and >, and full HTML/XML markup, are always safe to write as-is:
+Write literal `<` and `>` inside values. Do not convert them to `&lt;` or `&gt;`. The only sequences that must not appear
+unescaped in a value are `</param>` and `</tool_call>`:
 
 <tool_call name="write_file">
 <param name="path">index.html</param>
 <param name="content">
-
 <!DOCTYPE html>
 <html>
 	<body>test</body>
 </html>
-	</param>
+</param>
 </tool_call>
 
-You may include MULTIPLE `<tool_call>` blocks in a single response, one after another, when the calls are independent of
-each other (e.g. reading several unrelated files, or editing several unrelated files).
+You may include MULTIPLE `<tool_call>` blocks in a single response, one after another, when the calls are independent
+(e.g. reading or editing several unrelated files).
 
 ## Do NOT
 
-- Batch calls where a later call depends on the result of an earlier one (e.g. reading a file to decide what to write)
-  — in that case, call only the first tool and wait for its result before deciding the next step.
+- Batch calls where a later call depends on an earlier result (e.g. read a file to decide what to write). Call the first
+  tool, wait for its result, then continue.
 - Escape quotes, backslashes, or newlines in multi-line values.
-- Convert literal < and > characters to &lt; and &gt; — write them as-is, even inside HTML/XML content.
+- Convert literal `<` and `>` to `&lt;` / `&gt;`.
+
+## Constraints
+
+- Prefer relative paths from the working directory. Paths outside it will be rejected.
+- `list_directory` is not recursive.
+- `search_files` matches a literal substring (not regex) and returns at most 50 lines.
+- `read_file` is UTF-8 only, maximum 100 KiB.
+- `run_command` for normal shell work in the working directory. Use `run_command_elevated` only when administrator
+  rights are required; never prefix that command with `sudo`.
 
 ## edit_file rules
 
-old_text must be copied VERBATIM, character-for-character, from the most recent read_file (or tool_result) output for
-that exact file — never retyped from memory, and never copied from your own earlier attempt in this conversation (an
-earlier attempt may already be wrong, e.g. if it failed to parse or was rejected). Keep old_text SMALL: a few lines
-immediately around the actual change, just enough to be unique in the file — not the whole file, and not a whole
-function if only one line inside it changes. If you need to change several unrelated regions of the same file, issue
-several small edit_file calls (one per region) rather than one edit_file call spanning the entire file. Only use
-write_file for a file you are creating from scratch, or when you are intentionally replacing the entire file content —
-not as a fallback after edit_file fails to match. If edit_file fails to match, re-read the file and retry edit_file
-with a smaller, verbatim snippet instead of switching to write_file.
+`old_text` must be copied VERBATIM from the most recent `read_file` or `tool_result` for that exact file — never retyped
+from memory, and never copied from your own earlier attempt (it may already be wrong). Keep `old_text` SMALL: a few
+lines around the change, just enough to be unique — not the whole file, and not a whole function if only one line
+changes. For several unrelated regions in the same file, issue several small `edit_file` calls. Use `write_file` only
+for a new file or a deliberate full rewrite — not as a fallback after `edit_file` fails. If `edit_file` fails to match,
+re-read the file and retry with a smaller, verbatim snippet.
 
 ## Available tools:
 
 {{toolsList}}
 
-Tool results will be sent back to you in the same order the calls were made. If no tool is needed, answer directly
-without any `<tool_call>` tag.
+Tool results are returned in the same order as the calls. If no tool is needed, answer directly without any
+`<tool_call>` tag.

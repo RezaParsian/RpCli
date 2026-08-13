@@ -14,7 +14,7 @@ import { ContinuePrompt, InitPrompt, readAgentsMarkdown } from '../prompts/index
 import { deleteSession, isInvalidTokenError } from '../../core-lib/index.js'
 import listWorkspaceFiles from '../core/ListWorkspaceFiles.js'
 import { getChatSystemPrompt, getAIResponse, type ChatMode } from '../actions/agent.js'
-import sendMessage, { resetChatSession, stopCurrentGeneration } from '../core/apiClient.js'
+import sendMessage, { getCurrentSessionId, resetChatSession, stopCurrentGeneration } from '../core/apiClient.js'
 import { chatLogDirectory, isChatLoggingEnabled, setChatLoggingEnabled } from '../core/LogChat.js'
 
 function mentionQuery(value: string): string | undefined {
@@ -132,6 +132,7 @@ type Props = {
 	token: string
 	onInvalidToken: () => void
 	onExit: (code?: number) => void
+	onRegisterBeforeExit?: (cleanup?: () => Promise<void>) => void
 }
 
 const MessageRow = React.memo(function MessageRow({ msg, version }: { msg: Message; version?: string }) {
@@ -179,7 +180,7 @@ const MessageRow = React.memo(function MessageRow({ msg, version }: { msg: Messa
 	)
 })
 
-export default function InteractiveChatView({ version, token, onInvalidToken, onExit }: Props) {
+export default function InteractiveChatView({ version, token, onInvalidToken, onExit, onRegisterBeforeExit }: Props) {
 	const [messages, setMessages] = useState<Message[]>([
 		{
 			id: 'header-logo',
@@ -392,14 +393,14 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 
 	const handleSubmitRef = useRef<(value: string, options?: SubmitOptions) => void>(() => undefined)
 
-	const deleteUnusedSession = useCallback(() => {
-		if (hasUserMessage.current || sessionDeleted.current || !sessionId.current) {
-			return
-		}
+	const deleteUnusedSession = useCallback(async () => {
+		if (hasUserMessage.current || sessionDeleted.current) return
+
+		const id = sessionId.current ?? getCurrentSessionId()
+		if (!id) return
 
 		sessionDeleted.current = true
-
-		void deleteSession(token, sessionId.current).catch(() => undefined)
+		await deleteSession(token, id).catch(() => undefined)
 	}, [token])
 
 	const startSession = useCallback(() => {
@@ -421,7 +422,7 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 				initializationSucceeded.current = true
 
 				if (unmounted.current) {
-					deleteUnusedSession()
+					void deleteUnusedSession()
 				}
 			} catch (error) {
 				if (generation !== sessionGeneration.current) return
@@ -589,11 +590,26 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 		setInput((previous) => previous.replace(/@[^\s@]*$/, `@${query}`))
 	}, [])
 
-	useEffect(() => {
+	const mentionListGeneration = useRef(0)
+
+	const refreshMentionEntries = useCallback(() => {
+		const generation = ++mentionListGeneration.current
 		void listWorkspaceFiles()
-			.then((files) => setMentionEntries(createMentionEntries(files)))
+			.then((files) => {
+				if (generation !== mentionListGeneration.current) return
+				setMentionEntries(createMentionEntries(files))
+			})
 			.catch(() => undefined)
 	}, [])
+
+	useEffect(() => {
+		refreshMentionEntries()
+	}, [refreshMentionEntries])
+
+	useEffect(() => {
+		if (!filePickerOpen) return
+		refreshMentionEntries()
+	}, [filePickerOpen, refreshMentionEntries])
 
 	useEffect(() => {
 		unmounted.current = false
@@ -602,9 +618,14 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 		return () => {
 			unmounted.current = true
 
-			deleteUnusedSession()
+			void deleteUnusedSession()
 		}
 	}, [deleteUnusedSession, startSession])
+
+	useEffect(() => {
+		onRegisterBeforeExit?.(deleteUnusedSession)
+		return () => onRegisterBeforeExit?.(undefined)
+	}, [deleteUnusedSession, onRegisterBeforeExit])
 
 	const handleSubmit = useCallback(
 		(value: string, options: SubmitOptions = {}) => {

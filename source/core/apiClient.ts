@@ -56,6 +56,10 @@ export function resetChatSession(): void {
 	lastStreamMessageId = null
 }
 
+export function getCurrentSessionId(): string | undefined {
+	return sessionId
+}
+
 export default async function sendMessage({
 	token,
 	prompt,

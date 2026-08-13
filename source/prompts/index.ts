@@ -26,7 +26,10 @@ export function SystemPrompt(): string {
 
 	const agentPrompt = readAgentsMarkdown()
 
-	let systemPrompt = loadPrompt('system.md').replace('{{platform}}', process.platform).replace('{{tools}}', toolsPrompt)
+	let systemPrompt = loadPrompt('system.md')
+		.replace('{{platform}}', process.platform)
+		.replace('{{cwd}}', process.cwd())
+		.replace('{{tools}}', toolsPrompt)
 
 	if (agentPrompt !== '')
 		systemPrompt +=
@@ -41,11 +44,7 @@ export function InitPrompt(): string {
 }
 
 export function ContinuePrompt(): string {
-	return [
-		'Continue the previous task from where you left off.',
-		'Use tools as needed to finish the remaining work.',
-		'Do not restart from scratch; resume after the last tool results.',
-	].join(' ')
+	return loadPrompt('continue.md')
 }
 
 export function GitCommitMessage(): string {

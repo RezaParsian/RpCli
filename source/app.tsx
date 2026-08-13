@@ -31,18 +31,25 @@ function Header() {
 export default function App({ mode, commitAll, prompt, thinking, quiet, search, version }: Props) {
 	const { exit } = useApp()
 	const exiting = useRef(false)
+	const beforeExit = useRef<(() => Promise<void>) | undefined>(undefined)
 	const [token, setToken] = useState(process.env['DEEPSEEK_TOKEN'])
 	const quit = useCallback(
 		(code = 0) => {
 			if (exiting.current) return
 			exiting.current = true
-			exit()
-			setTimeout(() => {
-				process.exit(code)
-			}, 50)
+			void (async () => {
+				await beforeExit.current?.().catch(() => undefined)
+				exit()
+				setTimeout(() => {
+					process.exit(code)
+				}, 50)
+			})()
 		},
 		[exit]
 	)
+	const registerBeforeExit = useCallback((cleanup?: () => Promise<void>) => {
+		beforeExit.current = cleanup
+	}, [])
 
 	useInput(
 		(input, key) => {
@@ -101,5 +108,13 @@ export default function App({ mode, commitAll, prompt, thinking, quiet, search, 
 		)
 	}
 
-	return <InteractiveChatView version={version} token={token} onInvalidToken={handleInvalidToken} onExit={quit} />
+	return (
+		<InteractiveChatView
+			version={version}
+			token={token}
+			onInvalidToken={handleInvalidToken}
+			onExit={quit}
+			onRegisterBeforeExit={registerBeforeExit}
+		/>
+	)
 }
