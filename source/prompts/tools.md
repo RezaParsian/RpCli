@@ -47,8 +47,7 @@ You may include MULTIPLE `<tool_call>` blocks in a single response, one after an
 - `list_directory` is not recursive.
 - `search_files` matches a literal substring (not regex) and returns at most 50 lines.
 - `read_file` is UTF-8 only, maximum 100 KiB.
-- `run_command` for normal shell work in the working directory. Use `run_command_elevated` only when administrator
-  rights are required; never prefix that command with `sudo`.
+- `run_command` for shell work in the working directory. {{elevationHint}}
 
 ## edit_file rules
 

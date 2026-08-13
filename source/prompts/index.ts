@@ -22,7 +22,14 @@ export function SystemPrompt(): string {
 		.map((description, index) => `${index + 1}. ${description}`)
 		.join('\n')
 
-	const toolsPrompt = loadPrompt('tools.md').replace('{{toolsList}}', toolsList)
+	const elevationHint =
+		process.platform === 'win32'
+			? 'If administrator rights are needed, include the word `sudo` in the command (for example `sudo netstat -ab`). RP-CLI does not run a sudo binary on Windows; it strips `sudo` and opens a UAC dialog instead.'
+			: 'If administrator rights are needed, include `sudo` in the command (anywhere, not only at the start). RP-CLI strips `sudo` and opens an OS authorization dialog. There is no separate elevated tool.'
+
+	const toolsPrompt = loadPrompt('tools.md')
+		.replace('{{toolsList}}', toolsList)
+		.replace('{{elevationHint}}', elevationHint)
 
 	const agentPrompt = readAgentsMarkdown()
 

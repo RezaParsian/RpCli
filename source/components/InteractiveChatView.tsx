@@ -1,131 +1,26 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Box, Static, Text, useInput, useStdin } from 'ink'
-import RpCliLogo from './RpCliLogo.js'
 import Spinner from './Spinner.js'
-import MarkdownText from './MarkdownText.js'
-
 import { ToolConfirmation, useToolConfirmation } from './ToolConfirmation.js'
 import { TextArea } from 'react-ink-textarea'
 import FzfFilePicker, { createMentionEntries } from './FzfFilePicker.js'
 import SlashCommandPicker from './SlashCommandPicker.js'
+import ChatStatusBar from './chat/ChatStatusBar.js'
+import { createLiveStream } from './chat/createLiveStream.js'
+import { MessageRow } from './chat/MessageRow.js'
+import type { ChatMessage, SubmitOptions } from './chat/types.js'
+import { loadingSpinnerText } from './chat/types.js'
+import { useChatSession } from './chat/useChatSession.js'
+import { useComposerKeys } from './chat/useComposerKeys.js'
 import { formatSlashCommandHelp, resolveSlashCommand, type SlashCommand } from '../commands/index.js'
 import { hideStreamingToolCalls } from '../tools/index.js'
 import { ContinuePrompt, InitPrompt, readAgentsMarkdown } from '../prompts/index.js'
-import { deleteSession, isInvalidTokenError } from '../../core-lib/index.js'
+import { isInvalidTokenError } from '../../core-lib/index.js'
 import listWorkspaceFiles from '../core/ListWorkspaceFiles.js'
-import { getChatSystemPrompt, getAIResponse, type ChatMode } from '../actions/agent.js'
-import sendMessage, { getCurrentSessionId, resetChatSession, stopCurrentGeneration } from '../core/apiClient.js'
+import { endPosition, mentionQuery, slashCommandQuery } from '../core/textCursor.js'
+import { getAIResponse, type ChatMode } from '../actions/agent.js'
+import sendMessage, { stopCurrentGeneration } from '../core/apiClient.js'
 import { chatLogDirectory, isChatLoggingEnabled, setChatLoggingEnabled } from '../core/LogChat.js'
-
-function mentionQuery(value: string): string | undefined {
-	const match = /(?:^|\s)@([^\s@]*)$/.exec(value)
-	return match?.[1]
-}
-
-function slashCommandQuery(value: string): string | undefined {
-	const match = /^\/([^\s/]*)$/.exec(value.trimStart())
-	return match?.[1]
-}
-
-function endPosition(value: string): [line: number, column: number] {
-	const lines = value.split('\n')
-
-	return [lines.length - 1, lines[lines.length - 1]?.length ?? 0]
-}
-
-function cursorOffset(value: string, position: [number, number]): number {
-	const lines = value.split('\n')
-
-	let offset = 0
-
-	for (let index = 0; index < position[0]; index += 1) {
-		offset += (lines[index]?.length ?? 0) + 1
-	}
-
-	return offset + position[1]
-}
-
-function positionAt(value: string, offset: number): [number, number] {
-	const beforeCursor = value.slice(0, Math.max(0, Math.min(offset, value.length)))
-
-	return endPosition(beforeCursor)
-}
-
-function previousWordOffset(value: string, offset: number): number {
-	const beforeCursor = value.slice(0, offset)
-	const result = beforeCursor.search(/\S+\s*$/)
-
-	return result === -1 ? 0 : result
-}
-
-function nextWordOffset(value: string, offset: number): number {
-	const match = /\s*\S+/.exec(value.slice(offset))
-
-	return match ? offset + match.index + match[0].length : value.length
-}
-
-const GraphemeSegmenter = (
-	Intl as unknown as {
-		Segmenter: new (locale: string, options: { granularity: 'grapheme' }) => {
-			segment: (value: string) => Iterable<{
-				index: number
-				segment: string
-			}>
-		}
-	}
-).Segmenter
-
-const graphemeSegmenter = new GraphemeSegmenter('en', {
-	granularity: 'grapheme',
-})
-
-function previousCharacterOffset(value: string, offset: number): number {
-	if (offset <= 0) return 0
-
-	let previousOffset = 0
-	for (const segment of graphemeSegmenter.segment(value)) {
-		if (segment.index >= offset) break
-		previousOffset = segment.index
-	}
-
-	return previousOffset
-}
-
-function nextCharacterOffset(value: string, offset: number): number {
-	if (offset >= value.length) return value.length
-
-	for (const segment of graphemeSegmenter.segment(value)) {
-		const end = segment.index + segment.segment.length
-		if (end > offset) return end
-	}
-
-	return value.length
-}
-
-function nextDeleteWordOffset(value: string, offset: number): number {
-	const match = /^(?:\s+|\S+\s*)/.exec(value.slice(offset))
-	return match ? offset + match[0].length : offset
-}
-
-type SubmitOptions = {
-	addToHistory?: boolean
-	reloadAgentsAfter?: boolean
-}
-
-type Message = {
-	id: string
-	role: 'logo' | 'user' | 'thinking' | 'assistant' | 'console'
-	content: string
-}
-
-function loadingSpinnerText(streamingMessages: Message[]): string {
-	const role = streamingMessages[streamingMessages.length - 1]?.role
-
-	if (role === 'assistant') return 'Writing... Esc to stop'
-	if (role === 'console') return 'Running tools... Esc to stop'
-
-	return 'Thinking... Esc to stop'
-}
 
 type Props = {
 	version?: string
@@ -135,53 +30,8 @@ type Props = {
 	onRegisterBeforeExit?: (cleanup?: () => Promise<void>) => void
 }
 
-const MessageRow = React.memo(function MessageRow({ msg, version }: { msg: Message; version?: string }) {
-	return (
-		<Box flexDirection="column" marginBottom={1}>
-			{msg.role === 'logo' && <RpCliLogo version={version} />}
-
-			{msg.role === 'user' && (
-				<Box>
-					<Text color="magenta" bold>
-						{'> '}
-						{msg.content}
-					</Text>
-				</Box>
-			)}
-
-			{msg.role === 'assistant' && (
-				<Box>
-					<Text color="magenta" bold>
-						{'✦ '}
-					</Text>
-
-					<MarkdownText text={msg.content} />
-				</Box>
-			)}
-
-			{msg.role === 'thinking' && (
-				<Box>
-					<Text color="gray" dimColor>
-						{'◈ '}
-					</Text>
-
-					<Text color="gray" dimColor italic>
-						{msg.content}
-					</Text>
-				</Box>
-			)}
-
-			{msg.role === 'console' && (
-				<Box>
-					<MarkdownText text={msg.content} />
-				</Box>
-			)}
-		</Box>
-	)
-})
-
 export default function InteractiveChatView({ version, token, onInvalidToken, onExit, onRegisterBeforeExit }: Props) {
-	const [messages, setMessages] = useState<Message[]>([
+	const [messages, setMessages] = useState<ChatMessage[]>([
 		{
 			id: 'header-logo',
 			role: 'logo',
@@ -189,44 +39,34 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 		},
 	])
 
-	// Preserve the API order of current response, tool, and thinking events.
-	const [streamingMessages, setStreamingMessages] = useState<Message[]>([])
-
+	const [streamingMessages, setStreamingMessages] = useState<ChatMessage[]>([])
 	const [input, setInput] = useState('')
-
 	const [cursorPosition, setCursorPosition] = useState<[line: number, column: number]>([0, 0])
-
 	const [loading, setLoading] = useState(false)
-
 	const [thinkingEnabled, setThinkingEnabled] = useState(true)
-
 	const [searchEnabled, setSearchEnabled] = useState(false)
-
 	const [loggingEnabled, setLoggingEnabled] = useState(() => isChatLoggingEnabled())
-
 	const [mentionEntries, setMentionEntries] = useState<string[]>([])
-
 	const [filePickerOpen, setFilePickerOpen] = useState(false)
-
 	const [commandPickerOpen, setCommandPickerOpen] = useState(false)
-
 	const [mode, setMode] = useState<ChatMode>('normal')
 
-	const sessionId = useRef<string | undefined>(undefined)
-
-	const initialization = useRef<Promise<void> | undefined>(undefined)
-
-	const initializationSucceeded = useRef(false)
-	const hasUserMessage = useRef(false)
-	const unmounted = useRef(false)
-	const sessionDeleted = useRef(false)
-	const stopRequested = useRef(false)
-	const sessionGeneration = useRef(0)
+	const {
+		initialization,
+		initializationSucceeded,
+		hasUserMessage,
+		unmounted,
+		stopRequested,
+		deleteUnusedSession,
+		startSession,
+		resetConversation,
+	} = useChatSession({ token, onInvalidToken, setMessages })
 
 	const { pending, confirmTool } = useToolConfirmation()
-
 	const { stdin } = useStdin()
 	const rawBackspaceModifiers = useRef<boolean[]>([])
+	const handleSubmitRef = useRef<(value: string, options?: SubmitOptions) => void>(() => undefined)
+	const mentionListGeneration = useRef(0)
 
 	useEffect(() => {
 		const rememberBackspaceEncoding = (data: Buffer | string) => {
@@ -243,7 +83,6 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 	}, [stdin])
 
 	const fileQuery = mentionQuery(input) ?? ''
-
 	const commandQuery = slashCommandQuery(input) ?? ''
 
 	useInput((pressedInput, key) => {
@@ -276,175 +115,23 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 		onExit(130)
 	})
 
-	useInput(
-		(_input, key) => {
-			const lines = input.split('\n')
-
-			const [line, column] = cursorPosition
-
-			const offset = cursorOffset(input, cursorPosition)
-
-			if (key.backspace || key.delete) {
-				if (key.meta) return
-
-				const ctrlBackspace = key.backspace ? rawBackspaceModifiers.current.shift() === true : false
-				const deleteByWord = key.ctrl || ctrlBackspace
-				const start = key.backspace
-					? key.super
-						? cursorOffset(input, [line, 0])
-						: deleteByWord
-						? previousWordOffset(input, offset)
-						: previousCharacterOffset(input, offset)
-					: offset
-				const end = key.delete
-					? deleteByWord
-						? nextDeleteWordOffset(input, offset)
-						: nextCharacterOffset(input, offset)
-					: offset
-
-				if (start !== end) {
-					const nextValue = input.slice(0, start) + input.slice(end)
-					setInput(nextValue)
-					setCursorPosition(positionAt(nextValue, start))
-					setFilePickerOpen(mentionQuery(nextValue) !== undefined)
-					setCommandPickerOpen(slashCommandQuery(nextValue) !== undefined)
-				}
-
-				return
-			}
-
-			if (key.home || (key.ctrl && key.upArrow)) {
-				setCursorPosition(key.ctrl ? [0, 0] : [line, 0])
-
-				return
-			}
-
-			if (key.end || (key.ctrl && key.downArrow)) {
-				setCursorPosition(key.ctrl ? endPosition(input) : [line, lines[line]?.length ?? 0])
-
-				return
-			}
-
-			if (key.leftArrow) {
-				const nextOffset =
-					key.ctrl || key.meta ? previousWordOffset(input, offset) : previousCharacterOffset(input, offset)
-
-				setCursorPosition(positionAt(input, nextOffset))
-
-				return
-			}
-
-			if (key.rightArrow) {
-				const nextOffset = key.ctrl || key.meta ? nextWordOffset(input, offset) : nextCharacterOffset(input, offset)
-
-				setCursorPosition(positionAt(input, nextOffset))
-
-				return
-			}
-
-			if (key.upArrow && line > 0) {
-				setCursorPosition([line - 1, Math.min(column, lines[line - 1]?.length ?? 0)])
-
-				return
-			}
-
-			if (key.downArrow && line < lines.length - 1) {
-				setCursorPosition([line + 1, Math.min(column, lines[line + 1]?.length ?? 0)])
-
-				return
-			}
-
-			if (key.pageUp || key.pageDown) {
-				const direction = key.pageUp ? -1 : 1
-
-				const targetLine = Math.max(0, Math.min(lines.length - 1, line + direction * 5))
-
-				setCursorPosition([targetLine, Math.min(column, lines[targetLine]?.length ?? 0)])
-
-				return
-			}
-
-			if (key.tab) {
-				setMode((previous) => {
-					if (previous === 'normal') {
-						return 'yolo'
-					}
-
-					if (previous === 'yolo') {
-						return 'plan'
-					}
-
-					return 'normal'
-				})
-			}
-		},
-		{
-			isActive: !filePickerOpen && !commandPickerOpen && !loading && !pending,
-		}
-	)
+	useComposerKeys({
+		input,
+		cursorPosition,
+		setInput,
+		setCursorPosition,
+		setFilePickerOpen,
+		setCommandPickerOpen,
+		setMode,
+		rawBackspaceModifiers,
+		isActive: !filePickerOpen && !commandPickerOpen && !loading && !pending,
+	})
 
 	const handleInputChange = useCallback((value: string) => {
 		setInput(value)
-
 		setFilePickerOpen(mentionQuery(value) !== undefined)
-
 		setCommandPickerOpen(slashCommandQuery(value) !== undefined)
 	}, [])
-
-	const handleSubmitRef = useRef<(value: string, options?: SubmitOptions) => void>(() => undefined)
-
-	const deleteUnusedSession = useCallback(async () => {
-		if (hasUserMessage.current || sessionDeleted.current) return
-
-		const id = sessionId.current ?? getCurrentSessionId()
-		if (!id) return
-
-		sessionDeleted.current = true
-		await deleteSession(token, id).catch(() => undefined)
-	}, [token])
-
-	const startSession = useCallback(() => {
-		const generation = ++sessionGeneration.current
-		initializationSucceeded.current = false
-		initialization.current = (async () => {
-			try {
-				const response = await getAIResponse({ token, prompt: getChatSystemPrompt() })
-
-				if (generation !== sessionGeneration.current) {
-					if (response.sessionId) {
-						void deleteSession(token, response.sessionId).catch(() => undefined)
-					}
-
-					return
-				}
-
-				sessionId.current = response.sessionId
-				initializationSucceeded.current = true
-
-				if (unmounted.current) {
-					void deleteUnusedSession()
-				}
-			} catch (error) {
-				if (generation !== sessionGeneration.current) return
-
-				if (isInvalidTokenError(error)) {
-					onInvalidToken()
-					return
-				}
-
-				if (!unmounted.current) {
-					setMessages((previous) => [
-						...previous,
-						{
-							id: `err-${Date.now()}`,
-							role: 'assistant',
-							content: `Error: ${error instanceof Error ? error.message : String(error)}`,
-						},
-					])
-				}
-			}
-		})()
-	}, [deleteUnusedSession, onInvalidToken, token])
 
 	const runCommand = useCallback(
 		(command: SlashCommand) => {
@@ -472,11 +159,7 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 				clear() {
 					if (loading) return
 
-					deleteUnusedSession()
-					sessionDeleted.current = false
-					hasUserMessage.current = false
-					sessionId.current = undefined
-					resetChatSession()
+					resetConversation()
 					setInput('')
 					setCursorPosition([0, 0])
 					setStreamingMessages([])
@@ -488,7 +171,6 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 							content: '',
 						},
 					])
-					startSession()
 				},
 
 				help() {
@@ -506,7 +188,6 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 				toggleThinking() {
 					setThinkingEnabled((current) => {
 						const enabled = !current
-
 						setMessages((previous) => [
 							...previous,
 							{
@@ -515,9 +196,7 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 								content: `Thinking ${enabled ? 'enabled' : 'disabled'}.`,
 							},
 						])
-
 						setInput('')
-
 						return enabled
 					})
 				},
@@ -525,7 +204,6 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 				toggleSearch() {
 					setSearchEnabled((current) => {
 						const enabled = !current
-
 						setMessages((previous) => [
 							...previous,
 							{
@@ -534,9 +212,7 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 								content: `Search ${enabled ? 'enabled' : 'disabled'}.`,
 							},
 						])
-
 						setInput('')
-
 						return enabled
 					})
 				},
@@ -545,7 +221,6 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 					setLoggingEnabled((current) => {
 						const enabled = !current
 						void setChatLoggingEnabled(enabled)
-
 						setMessages((previous) => [
 							...previous,
 							{
@@ -556,9 +231,7 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 									: 'Logging disabled.',
 							},
 						])
-
 						setInput('')
-
 						return enabled
 					})
 				},
@@ -566,7 +239,7 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 				exit: onExit,
 			})
 		},
-		[deleteUnusedSession, loading, onExit, startSession]
+		[loading, onExit, resetConversation]
 	)
 
 	const updateCommandQuery = useCallback((query: string) => {
@@ -576,11 +249,8 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 	const selectFile = useCallback(
 		(file: string) => {
 			const nextInput = input.replace(/@[^\s@]*$/, `@${file} `)
-
 			setInput(nextInput)
-
 			setCursorPosition(endPosition(nextInput))
-
 			setFilePickerOpen(false)
 		},
 		[input]
@@ -589,8 +259,6 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 	const updateFileQuery = useCallback((query: string) => {
 		setInput((previous) => previous.replace(/@[^\s@]*$/, `@${query}`))
 	}, [])
-
-	const mentionListGeneration = useRef(0)
 
 	const refreshMentionEntries = useCallback(() => {
 		const generation = ++mentionListGeneration.current
@@ -617,7 +285,6 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 
 		return () => {
 			unmounted.current = true
-
 			void deleteUnusedSession()
 		}
 	}, [deleteUnusedSession, startSession])
@@ -633,10 +300,7 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 				return
 			}
 
-			const addToHistory = options.addToHistory ?? true
-
 			const slashCommand = resolveSlashCommand(value)
-
 			if (slashCommand) {
 				runCommand(slashCommand)
 				return
@@ -644,7 +308,8 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 
 			hasUserMessage.current = true
 
-			const userMessage: Message = {
+			const addToHistory = options.addToHistory ?? true
+			const userMessage: ChatMessage = {
 				id: `user-${Date.now()}-${Math.random()}`,
 				role: 'user',
 				content: value.trim(),
@@ -658,69 +323,12 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 			setCursorPosition([0, 0])
 			setLoading(true)
 			stopRequested.current = false
-
 			setStreamingMessages([])
 
 			const streamId = `${Date.now()}-${Math.random()}`
-
-			// Shared ordered buffer for every event in this request.
-			let liveMessages: Message[] = []
-
 			const responseContent = new Map<string, string>()
-
 			const thinkingContent = new Map<string, string>()
-
-			let throttleTimer: NodeJS.Timeout | undefined
-
-			let lastFlush = 0
-
-			const upsertLiveMessage = (message: Message) => {
-				const index = liveMessages.findIndex((item) => item.id === message.id)
-
-				if (index === -1) {
-					liveMessages = [...liveMessages, message]
-
-					return
-				}
-
-				liveMessages = liveMessages.map((item, itemIndex) => (itemIndex === index ? message : item))
-			}
-
-			const appendLiveMessage = (message: Message) => {
-				liveMessages = [...liveMessages, message]
-			}
-
-			const flushUpdates = () => {
-				if (throttleTimer) {
-					clearTimeout(throttleTimer)
-				}
-
-				throttleTimer = undefined
-
-				setStreamingMessages([...liveMessages])
-			}
-
-			const scheduleFlush = () => {
-				const now = Date.now()
-
-				const remaining = 50 - (now - lastFlush)
-
-				if (remaining <= 0) {
-					lastFlush = now
-
-					flushUpdates()
-
-					return
-				}
-
-				if (!throttleTimer) {
-					throttleTimer = setTimeout(() => {
-						lastFlush = Date.now()
-
-						flushUpdates()
-					}, remaining)
-				}
-			}
+			const stream = createLiveStream((next) => setStreamingMessages(next))
 
 			void (async () => {
 				try {
@@ -735,82 +343,49 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 						prompt: userMessage.content,
 						confirmTool,
 						onToolMessage: (content) => {
-							appendLiveMessage({
+							stream.append({
 								id: `console-${Date.now()}-${Math.random()}`,
 								role: 'console',
 								content,
 							})
-
-							scheduleFlush()
+							stream.scheduleFlush()
 						},
 						thinkingEnabled,
 						onChunk: (chunk) => {
 							if (chunk.type === 'response') {
 								const messageKey = String(chunk.messageId ?? 'pending')
-
 								const id = `${streamId}-${messageKey}-response`
-
 								const previous = responseContent.get(messageKey) ?? ''
-
 								const rawContent = previous + chunk.content
-
 								responseContent.set(messageKey, rawContent)
-
 								const visibleContent = hideStreamingToolCalls(rawContent)
+								if (!visibleContent) return
 
-								if (!visibleContent) {
-									return
-								}
-
-								upsertLiveMessage({
-									id,
-									role: 'assistant',
-									content: visibleContent,
-								})
-
-								scheduleFlush()
-
+								stream.upsert({ id, role: 'assistant', content: visibleContent })
+								stream.scheduleFlush()
 								return
 							}
 
 							if (chunk.type === 'thinking') {
 								const messageKey = String(chunk.messageId ?? 'pending')
-
 								const id = `${streamId}-${messageKey}-thinking`
-
 								const previous = thinkingContent.get(messageKey) ?? ''
-
 								const content = previous + chunk.content
-
 								thinkingContent.set(messageKey, content)
-
-								upsertLiveMessage({
-									id,
-									role: 'thinking',
-									content,
-								})
-
-								scheduleFlush()
+								stream.upsert({ id, role: 'thinking', content })
+								stream.scheduleFlush()
 							}
 						},
 						searchEnabled,
 						mode,
 					})
 
-					if (throttleTimer) {
-						clearTimeout(throttleTimer)
+					stream.dispose()
 
-						throttleTimer = undefined
-					}
-
-					// Avoid duplicating a response already received through streaming.
-					const hasStreamedAssistant = liveMessages.some((message) => message.role === 'assistant')
-
-					if (!hasStreamedAssistant) {
+					if (!stream.messages.some((message) => message.role === 'assistant')) {
 						const finalContent = fullResponse.content?.trim()
-
 						if (finalContent) {
-							appendLiveMessage({
+							stream.append({
 								id: `${streamId}-assistant-final`,
 								role: 'assistant',
 								content: finalContent,
@@ -818,8 +393,8 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 						}
 					}
 
-					if (liveMessages.length > 0) {
-						setMessages((previous) => [...previous, ...liveMessages])
+					if (stream.messages.length > 0) {
+						setMessages((previous) => [...previous, ...stream.messages])
 					}
 
 					setStreamingMessages([])
@@ -857,8 +432,8 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 						return
 					}
 
-					if (liveMessages.length > 0) {
-						setMessages((previous) => [...previous, ...liveMessages])
+					if (stream.messages.length > 0) {
+						setMessages((previous) => [...previous, ...stream.messages])
 					}
 
 					if (stopRequested.current || (error instanceof Error && error.name === 'AbortError')) {
@@ -877,17 +452,26 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 
 					setStreamingMessages([])
 				} finally {
-					if (throttleTimer) {
-						clearTimeout(throttleTimer)
-					}
-
-					throttleTimer = undefined
-
+					stream.dispose()
 					setLoading(false)
 				}
 			})()
 		},
-		[loading, token, confirmTool, onInvalidToken, runCommand, thinkingEnabled, searchEnabled, mode]
+		[
+			confirmTool,
+			hasUserMessage,
+			initialization,
+			initializationSucceeded,
+			loading,
+			mode,
+			onInvalidToken,
+			runCommand,
+			searchEnabled,
+			stopRequested,
+			thinkingEnabled,
+			token,
+			unmounted,
+		]
 	)
 
 	handleSubmitRef.current = handleSubmit
@@ -907,41 +491,12 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 					<Spinner text={loadingSpinnerText(streamingMessages)} />
 				) : (
 					<Box flexDirection="column">
-						<Box justifyContent="space-between" paddingX={1}>
-							<Text dimColor>Ready</Text>
-
-							<Box gap={2}>
-								<Text>
-									Mode:{' '}
-									<Text color={mode === 'yolo' ? 'red' : mode === 'normal' ? 'yellow' : 'green'}>{mode}</Text>{' '}
-									<Text dimColor>(TAB)</Text>
-								</Text>
-
-								<Text>
-									Search:{' '}
-									<Text color={searchEnabled ? 'green' : 'red'} bold>
-										{searchEnabled ? 'ON' : 'OFF'}
-									</Text>{' '}
-									<Text dimColor>(/search)</Text>
-								</Text>
-
-								<Text>
-									Thinking:{' '}
-									<Text color={thinkingEnabled ? 'green' : 'red'} bold>
-										{thinkingEnabled ? 'ON' : 'OFF'}
-									</Text>{' '}
-									<Text dimColor>(/thinking)</Text>
-								</Text>
-
-								<Text>
-									Log:{' '}
-									<Text color={loggingEnabled ? 'green' : 'red'} bold>
-										{loggingEnabled ? 'ON' : 'OFF'}
-									</Text>{' '}
-									<Text dimColor>(/logging)</Text>
-								</Text>
-							</Box>
-						</Box>
+						<ChatStatusBar
+							mode={mode}
+							searchEnabled={searchEnabled}
+							thinkingEnabled={thinkingEnabled}
+							loggingEnabled={loggingEnabled}
+						/>
 
 						<Box
 							borderStyle="single"
