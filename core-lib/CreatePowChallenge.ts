@@ -1,3 +1,5 @@
+import { assertValidTokenResponse } from './InvalidTokenError.js'
+
 interface PowChallenge {
 	challenge: string
 }
@@ -20,4 +22,3 @@ async function createPowChallenge(token: string): Promise<PowChallenge> {
 }
 
 export default createPowChallenge
-import { assertValidTokenResponse } from './InvalidTokenError.js'

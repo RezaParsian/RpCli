@@ -1,9 +1,11 @@
 import sendMessage, { beginGeneration, isGenerationStopped } from '../core/apiClient.js'
 import { SystemPrompt } from '../prompts/index.js'
 import { executeToolCalls, formatToolActivityMessage, parseToolCalls, type ToolCall, type ToolResult } from '../tools/index.js'
-import { ChatResult, ChatStreamChunk } from '../../core-lib/Chat.js'
+import { type ChatResult, type ChatStreamChunk } from '../../core-lib/index.js'
 
-export const CHAT_SYSTEM_PROMPT = SystemPrompt()
+export function getChatSystemPrompt(): string {
+	return SystemPrompt()
+}
 
 function formatResultsMessage(results: ToolResult[]): string {
 	const blocks = results

@@ -3,6 +3,7 @@ import path from 'node:path'
 import { exec as execCallback } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { promisify } from 'node:util'
+import listWorkspaceFiles from '../core/ListWorkspaceFiles.js'
 
 type SudoPromptCallback = (error?: Error, stdout?: string | Buffer, stderr?: string | Buffer) => void
 
@@ -46,7 +47,6 @@ type Tool = {
 }
 
 const rootDirectory = process.cwd()
-const ignoredDirectories = new Set(['.git', 'dist', 'node_modules'])
 const exec = promisify(execCallback)
 
 function elevatedExec(command: string): Promise<{ stdout: string; stderr: string }> {
@@ -112,22 +112,16 @@ async function safeTargetPath(requestedPath: string): Promise<string> {
 	return path.join(parent, path.basename(resolvedPath))
 }
 
-async function walk(directory: string): Promise<string[]> {
-	const entries = await fs.readdir(directory, { withFileTypes: true })
-	const files: string[] = []
-
-	for (const entry of entries) {
-		if (entry.isDirectory() && ignoredDirectories.has(entry.name)) continue
-
-		const entryPath = path.join(directory, entry.name)
-		if (entry.isDirectory()) {
-			files.push(...(await walk(entryPath)))
-		} else if (entry.isFile()) {
-			files.push(entryPath)
-		}
-	}
+async function listSearchFiles(directory: string): Promise<string[]> {
+	const relativeDirectory = path.relative(rootDirectory, directory).split(path.sep).join('/')
+	const files = await listWorkspaceFiles(rootDirectory)
 
 	return files
+		.filter((file) => {
+			if (!relativeDirectory || relativeDirectory === '.') return true
+			return file === relativeDirectory || file.startsWith(`${relativeDirectory}/`)
+		})
+		.map((file) => path.join(rootDirectory, file))
 }
 
 const tools: Tool[] = [
@@ -212,7 +206,7 @@ const tools: Tool[] = [
 		async execute(arguments_) {
 			const query = stringArgument(arguments_, 'query')
 			const directory = await safePath(stringArgument(arguments_, 'path', '.'))
-			const files = await walk(directory)
+			const files = await listSearchFiles(directory)
 			const matches: string[] = []
 
 			for (const filePath of files) {

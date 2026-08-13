@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Box, Text, useApp, useInput } from 'ink'
 import Spinner from './Spinner.js'
 import { executeCommit, generateCommitMessage, getGitDiff } from '../actions/commitMessage.js'
-import { isInvalidTokenError } from '../../core-lib/InvalidTokenError.js'
+import { isInvalidTokenError } from '../../core-lib/index.js'
 
 type State = 'init' | 'generating' | 'review' | 'committing' | 'success' | 'cancelled' | 'no-diff' | 'error'
 

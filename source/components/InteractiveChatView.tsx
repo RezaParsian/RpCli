@@ -6,20 +6,15 @@ import MarkdownText from './MarkdownText.js'
 
 import { ToolConfirmation, useToolConfirmation } from './ToolConfirmation.js'
 import { TextArea } from 'react-ink-textarea'
-import { execFile } from 'node:child_process'
-import { promisify } from 'node:util'
 import FzfFilePicker, { createMentionEntries } from './FzfFilePicker.js'
 import SlashCommandPicker from './SlashCommandPicker.js'
-import { resolveSlashCommand, type SlashCommand } from '../commands/index.js'
+import { formatSlashCommandHelp, resolveSlashCommand, type SlashCommand } from '../commands/index.js'
 import { hideStreamingToolCalls } from '../tools/index.js'
-import { InitPrompt } from '../prompts/index.js'
-import { isInvalidTokenError } from '../../core-lib/InvalidTokenError.js'
-import listWorkspaceFiles from '../../core-lib/ListWorkspaceFiles.js'
-import deleteSession from '../../core-lib/DeleteSession.js'
-import { CHAT_SYSTEM_PROMPT, getAIResponse } from '../actions/agent.js'
-import { stopCurrentGeneration } from '../core/apiClient.js'
-
-const execFileAsync = promisify(execFile)
+import { InitPrompt, readAgentsMarkdown } from '../prompts/index.js'
+import { deleteSession, isInvalidTokenError } from '../../core-lib/index.js'
+import listWorkspaceFiles from '../core/ListWorkspaceFiles.js'
+import { getChatSystemPrompt, getAIResponse } from '../actions/agent.js'
+import sendMessage, { resetChatSession, stopCurrentGeneration } from '../core/apiClient.js'
 
 function mentionQuery(value: string): string | undefined {
 	const match = /(?:^|\s)@([^\s@]*)$/.exec(value)
@@ -109,6 +104,11 @@ function nextCharacterOffset(value: string, offset: number): number {
 function nextDeleteWordOffset(value: string, offset: number): number {
 	const match = /^(?:\s+|\S+\s*)/.exec(value.slice(offset))
 	return match ? offset + match[0].length : offset
+}
+
+type SubmitOptions = {
+	addToHistory?: boolean
+	reloadAgentsAfter?: boolean
 }
 
 type Message = {
@@ -217,6 +217,7 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 	const unmounted = useRef(false)
 	const sessionDeleted = useRef(false)
 	const stopRequested = useRef(false)
+	const sessionGeneration = useRef(0)
 
 	const { pending, confirmTool } = useToolConfirmation()
 
@@ -386,7 +387,60 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 		setCommandPickerOpen(slashCommandQuery(value) !== undefined)
 	}, [])
 
-	const handleSubmitRef = useRef<(value: string, addToHistory?: boolean) => void>(() => undefined)
+	const handleSubmitRef = useRef<(value: string, options?: SubmitOptions) => void>(() => undefined)
+
+	const deleteUnusedSession = useCallback(() => {
+		if (hasUserMessage.current || sessionDeleted.current || !sessionId.current) {
+			return
+		}
+
+		sessionDeleted.current = true
+
+		void deleteSession(token, sessionId.current).catch(() => undefined)
+	}, [token])
+
+	const startSession = useCallback(() => {
+		const generation = ++sessionGeneration.current
+		initializationSucceeded.current = false
+		initialization.current = (async () => {
+			try {
+				const response = await getAIResponse(token, getChatSystemPrompt())
+
+				if (generation !== sessionGeneration.current) {
+					if (response.sessionId) {
+						void deleteSession(token, response.sessionId).catch(() => undefined)
+					}
+
+					return
+				}
+
+				sessionId.current = response.sessionId
+				initializationSucceeded.current = true
+
+				if (unmounted.current) {
+					deleteUnusedSession()
+				}
+			} catch (error) {
+				if (generation !== sessionGeneration.current) return
+
+				if (isInvalidTokenError(error)) {
+					onInvalidToken()
+					return
+				}
+
+				if (!unmounted.current) {
+					setMessages((previous) => [
+						...previous,
+						{
+							id: `err-${Date.now()}`,
+							role: 'assistant',
+							content: `Error: ${error instanceof Error ? error.message : String(error)}`,
+						},
+					])
+				}
+			}
+		})()
+	}, [deleteUnusedSession, onInvalidToken, token])
 
 	const runCommand = useCallback(
 		(command: SlashCommand) => {
@@ -394,7 +448,41 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 
 			command.execute({
 				init() {
-					handleSubmitRef.current(InitPrompt(), false)
+					handleSubmitRef.current(InitPrompt(), { addToHistory: false, reloadAgentsAfter: true })
+				},
+
+				clear() {
+					if (loading) return
+
+					deleteUnusedSession()
+					sessionDeleted.current = false
+					hasUserMessage.current = false
+					sessionId.current = undefined
+					resetChatSession()
+					setInput('')
+					setCursorPosition([0, 0])
+					setStreamingMessages([])
+					setMessages((previous) => [
+						...previous,
+						{
+							id: `logo-${Date.now()}-${Math.random()}`,
+							role: 'logo',
+							content: '',
+						},
+					])
+					startSession()
+				},
+
+				help() {
+					setMessages((previous) => [
+						...previous,
+						{
+							id: `console-${Date.now()}-${Math.random()}`,
+							role: 'console',
+							content: formatSlashCommandHelp(),
+						},
+					])
+					setInput('')
 				},
 
 				toggleThinking() {
@@ -438,7 +526,7 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 				exit: onExit,
 			})
 		},
-		[onExit]
+		[deleteUnusedSession, loading, onExit, startSession]
 	)
 
 	const updateCommandQuery = useCallback((query: string) => {
@@ -463,74 +551,29 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 	}, [])
 
 	useEffect(() => {
-		void (async () => {
-			let files: string[]
-
-			try {
-				const { stdout } = await execFileAsync('git', ['ls-files', '--cached', '--others', '--exclude-standard'])
-
-				files = stdout.split('\n').filter(Boolean)
-			} catch {
-				files = await listWorkspaceFiles()
-			}
-
-			setMentionEntries(createMentionEntries(files))
-		})()
+		void listWorkspaceFiles()
+			.then((files) => setMentionEntries(createMentionEntries(files)))
+			.catch(() => undefined)
 	}, [])
 
-	const deleteUnusedSession = useCallback(() => {
-		if (hasUserMessage.current || sessionDeleted.current || !sessionId.current) {
-			return
-		}
-
-		sessionDeleted.current = true
-
-		void deleteSession(token, sessionId.current).catch(() => undefined)
-	}, [token])
-
 	useEffect(() => {
-		initialization.current = (async () => {
-			try {
-				const response = await getAIResponse(token, CHAT_SYSTEM_PROMPT)
-
-				sessionId.current = response.sessionId
-
-				initializationSucceeded.current = true
-
-				if (unmounted.current) {
-					deleteUnusedSession()
-				}
-			} catch (error) {
-				if (isInvalidTokenError(error)) {
-					onInvalidToken()
-					return
-				}
-
-				if (!unmounted.current) {
-					setMessages((previous) => [
-						...previous,
-						{
-							id: `err-${Date.now()}`,
-							role: 'assistant',
-							content: `Error: ${error instanceof Error ? error.message : String(error)}`,
-						},
-					])
-				}
-			}
-		})()
+		unmounted.current = false
+		startSession()
 
 		return () => {
 			unmounted.current = true
 
 			deleteUnusedSession()
 		}
-	}, [deleteUnusedSession, onInvalidToken, token])
+	}, [deleteUnusedSession, startSession])
 
 	const handleSubmit = useCallback(
-		(value: string, addToHistory: boolean = true) => {
+		(value: string, options: SubmitOptions = {}) => {
 			if (!value.trim() || loading) {
 				return
 			}
+
+			const addToHistory = options.addToHistory ?? true
 
 			const slashCommand = resolveSlashCommand(value)
 
@@ -726,6 +769,35 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 					}
 
 					setStreamingMessages([])
+
+					if (options.reloadAgentsAfter && !stopRequested.current && !fullResponse.stopped) {
+						const agents = readAgentsMarkdown().trim()
+
+						if (agents) {
+							try {
+								await sendMessage(
+									token,
+									`AGENTS.md is now the project-specific ground truth for this session. Follow it unless the user asks otherwise.\n\n${agents}`,
+									thinkingEnabled,
+									undefined,
+									searchEnabled
+								)
+
+								if (!unmounted.current) {
+									setMessages((previous) => [
+										...previous,
+										{
+											id: `console-${Date.now()}-${Math.random()}`,
+											role: 'console',
+											content: 'Loaded AGENTS.md into this session.',
+										},
+									])
+								}
+							} catch {
+								// The file is on disk even if the follow-up message fails.
+							}
+						}
+					}
 				} catch (error) {
 					if (isInvalidTokenError(error)) {
 						onInvalidToken()

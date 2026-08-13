@@ -1,6 +1,6 @@
 import { execSync } from 'child_process'
 import { GitCommitMessage } from '../prompts/index.js'
-import deleteSession from '../../core-lib/DeleteSession.js'
+import { deleteSession } from '../../core-lib/index.js'
 import { getAIResponse } from './agent.js'
 
 export function getGitDiff(useAll: boolean): string {

@@ -1,10 +1,14 @@
 // @ts-ignore
 import PowSolver from '@rezaparsian/deepseek-pow-solver'
-import chat, { ChatResult, ChatStreamChunk } from '../../core-lib/Chat.js'
-import createSessions from '../../core-lib/CreateSessions.js'
-import createPowChallenge from '../../core-lib/CreatePowChallenge.js'
-import chatSessions from '../../core-lib/ChatSessions.js'
-import stopStream from '../../core-lib/StopStream.js'
+import {
+	chat,
+	chatSessions,
+	createPowChallenge,
+	createSessions,
+	stopStream,
+	type ChatResult,
+	type ChatStreamChunk,
+} from '../../core-lib/index.js'
 import logFn from './LogChat.js'
 
 let sessionId = process.env['DEEPSEEK_SESSION_ID']
@@ -34,6 +38,13 @@ export async function stopCurrentGeneration(token: string): Promise<void> {
 	if (currentSessionId && typeof messageId === 'number') {
 		await stopStream({ token, sessionId: currentSessionId, messageId }).catch(() => undefined)
 	}
+}
+
+export function resetChatSession(): void {
+	sessionId = undefined
+	parentMessageId = null
+	generationAbort = null
+	lastStreamMessageId = null
 }
 
 export default async function sendMessage(

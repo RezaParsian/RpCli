@@ -4,9 +4,8 @@ import Spinner from './Spinner.js'
 import MarkdownText from './MarkdownText.js'
 import { ToolConfirmation, useToolConfirmation } from './ToolConfirmation.js'
 import { hideStreamingToolCalls } from '../tools/index.js'
-import deleteSession from '../../core-lib/DeleteSession.js'
-import { isInvalidTokenError } from '../../core-lib/InvalidTokenError.js'
-import { CHAT_SYSTEM_PROMPT, getAIResponse } from '../actions/agent.js'
+import { deleteSession, isInvalidTokenError } from '../../core-lib/index.js'
+import { getChatSystemPrompt, getAIResponse } from '../actions/agent.js'
 
 type State = 'loading' | 'done' | 'error'
 
@@ -35,7 +34,7 @@ export default function SinglePromptView({ prompt, thinking, quiet, search, toke
 		let streamedResponse = ''
 		void (async () => {
 			try {
-				await getAIResponse(token, CHAT_SYSTEM_PROMPT, undefined, undefined, thinking, undefined, search)
+				await getAIResponse(token, getChatSystemPrompt(), undefined, undefined, thinking, undefined, search)
 
 				const fullResponse = await getAIResponse(
 					token,

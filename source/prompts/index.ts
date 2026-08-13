@@ -9,7 +9,7 @@ function loadPrompt(name: string): string {
 	return fs.readFileSync(path.join(promptsDirectory, name), 'utf8')
 }
 
-function AgentPrompt(): string {
+export function readAgentsMarkdown(): string {
 	const filePath = path.join(path.resolve('.'), './AGENTS.md')
 
 	if (!fs.existsSync(filePath)) return ''
@@ -24,7 +24,7 @@ export function SystemPrompt(): string {
 
 	const toolsPrompt = loadPrompt('tools.md').replace('{{toolsList}}', toolsList)
 
-	const agentPrompt = AgentPrompt()
+	const agentPrompt = readAgentsMarkdown()
 
 	let systemPrompt = loadPrompt('system.md').replace('{{platform}}', process.platform).replace('{{tools}}', toolsPrompt)
 

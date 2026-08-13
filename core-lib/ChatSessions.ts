@@ -1,4 +1,6 @@
-interface ChatSession {
+import { assertValidTokenResponse } from './InvalidTokenError.js'
+
+export interface ChatSession {
 	id: string
 	seq_id: number
 	title: string
@@ -27,4 +29,3 @@ async function chatSessions(token: string): Promise<ChatSession[]> {
 }
 
 export default chatSessions
-import { assertValidTokenResponse } from './InvalidTokenError.js'

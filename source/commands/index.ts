@@ -3,6 +3,8 @@ export type SlashCommandContext = {
 	toggleThinking: () => void
 	toggleSearch: () => void
 	init: () => void
+	clear: () => void
+	help: () => void
 }
 
 export type SlashCommand = {
@@ -16,9 +18,23 @@ export type SlashCommand = {
 export const slashCommands: SlashCommand[] = [
 	{
 		name: '/init',
-		description: '',
+		description: 'Generate AGENTS.md for this repository',
 		execute: ({ init }) => {
 			init()
+		},
+	},
+	{
+		name: '/clear',
+		description: 'Start a new conversation',
+		execute({ clear }) {
+			clear()
+		},
+	},
+	{
+		name: '/help',
+		description: 'Show available commands',
+		execute({ help }) {
+			help()
 		},
 	},
 	{
@@ -44,6 +60,16 @@ export const slashCommands: SlashCommand[] = [
 		},
 	},
 ]
+
+function commandLabel(command: SlashCommand): string {
+	const aliases = command.aliases?.length ? ` (${command.aliases.join(', ')})` : ''
+	return `**${command.name}**${aliases} — ${command.description}`
+}
+
+export function formatSlashCommandHelp(): string {
+	const lines = slashCommands.map((command) => `- ${commandLabel(command)}`)
+	return ['### Commands', '', ...lines].join('\n')
+}
 
 export function resolveSlashCommand(value: string): SlashCommand | undefined {
 	const commandName = value.trim().toLowerCase()
