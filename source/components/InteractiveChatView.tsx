@@ -8,13 +8,14 @@ import SlashCommandPicker from './SlashCommandPicker.js'
 import ChatStatusBar from './chat/ChatStatusBar.js'
 import { createLiveStream } from './chat/createLiveStream.js'
 import { MessageRow } from './chat/MessageRow.js'
+import PlanConfirmation from './chat/PlanConfirmation.js'
 import type { ChatMessage, SubmitOptions } from './chat/types.js'
 import { loadingSpinnerText } from './chat/types.js'
 import { useChatSession } from './chat/useChatSession.js'
 import { useComposerKeys } from './chat/useComposerKeys.js'
 import { formatSlashCommandHelp, resolveSlashCommand, type SlashCommand } from '../commands/index.js'
 import { hideStreamingToolCalls } from '../tools/index.js'
-import { ContinuePrompt, InitPrompt, readAgentsMarkdown } from '../prompts/index.js'
+import { ContinuePrompt, ExecutePlanPrompt, InitPrompt, PlanPrompt, readAgentsMarkdown } from '../prompts/index.js'
 import { isInvalidTokenError } from '../../core-lib/index.js'
 import listWorkspaceFiles from '../core/ListWorkspaceFiles.js'
 import { endPosition, mentionQuery, slashCommandQuery } from '../core/textCursor.js'
@@ -50,6 +51,8 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 	const [filePickerOpen, setFilePickerOpen] = useState(false)
 	const [commandPickerOpen, setCommandPickerOpen] = useState(false)
 	const [mode, setMode] = useState<ChatMode>('normal')
+	const [awaitingPlanStart, setAwaitingPlanStart] = useState(false)
+	const modeBeforePlan = useRef<ChatMode>('normal')
 
 	const {
 		initialization,
@@ -124,7 +127,7 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 		setCommandPickerOpen,
 		setMode,
 		rawBackspaceModifiers,
-		isActive: !filePickerOpen && !commandPickerOpen && !loading && !pending,
+		isActive: !filePickerOpen && !commandPickerOpen && !loading && !pending && !awaitingPlanStart,
 	})
 
 	const handleInputChange = useCallback((value: string) => {
@@ -163,6 +166,7 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 					setInput('')
 					setCursorPosition([0, 0])
 					setStreamingMessages([])
+					setAwaitingPlanStart(false)
 					setMessages((previous) => [
 						...previous,
 						{
@@ -294,9 +298,17 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 		return () => onRegisterBeforeExit?.(undefined)
 	}, [deleteUnusedSession, onRegisterBeforeExit])
 
+	useEffect(() => {
+		if (mode !== 'plan') modeBeforePlan.current = mode
+	}, [mode])
+
 	const handleSubmit = useCallback(
 		(value: string, options: SubmitOptions = {}) => {
 			if (!value.trim() || loading) {
+				return
+			}
+
+			if (awaitingPlanStart && !options.executeApprovedPlan) {
 				return
 			}
 
@@ -309,11 +321,16 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 			hasUserMessage.current = true
 
 			const addToHistory = options.addToHistory ?? true
+			const effectiveMode = options.modeOverride ?? mode
 			const userMessage: ChatMessage = {
 				id: `user-${Date.now()}-${Math.random()}`,
 				role: 'user',
 				content: value.trim(),
 			}
+			const apiPrompt =
+				effectiveMode === 'plan' && !options.executeApprovedPlan && addToHistory
+					? PlanPrompt(userMessage.content)
+					: userMessage.content
 
 			if (addToHistory) {
 				setMessages((previous) => [...previous, userMessage])
@@ -340,7 +357,7 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 
 					const fullResponse = await getAIResponse({
 						token,
-						prompt: userMessage.content,
+						prompt: apiPrompt,
 						confirmTool,
 						onToolMessage: (content) => {
 							stream.append({
@@ -377,7 +394,7 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 							}
 						},
 						searchEnabled,
-						mode,
+						mode: effectiveMode,
 					})
 
 					stream.dispose()
@@ -426,6 +443,17 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 							}
 						}
 					}
+
+					if (
+						effectiveMode === 'plan' &&
+						!options.executeApprovedPlan &&
+						!options.reloadAgentsAfter &&
+						!stopRequested.current &&
+						!fullResponse.stopped &&
+						!unmounted.current
+					) {
+						setAwaitingPlanStart(true)
+					}
 				} catch (error) {
 					if (isInvalidTokenError(error)) {
 						onInvalidToken()
@@ -471,10 +499,43 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 			thinkingEnabled,
 			token,
 			unmounted,
+			awaitingPlanStart,
 		]
 	)
 
 	handleSubmitRef.current = handleSubmit
+
+	const handlePlanDecision = useCallback((start: boolean) => {
+		setAwaitingPlanStart(false)
+
+		if (!start) {
+			setMessages((previous) => [
+				...previous,
+				{
+					id: `console-${Date.now()}-${Math.random()}`,
+					role: 'console',
+					content: 'Plan not started. Still in plan mode.',
+				},
+			])
+			return
+		}
+
+		const executeMode = modeBeforePlan.current
+		setMode(executeMode)
+		setMessages((previous) => [
+			...previous,
+			{
+				id: `console-${Date.now()}-${Math.random()}`,
+				role: 'console',
+				content: `Starting the plan in ${executeMode} mode…`,
+			},
+		])
+		handleSubmitRef.current(ExecutePlanPrompt(executeMode), {
+			addToHistory: false,
+			executeApprovedPlan: true,
+			modeOverride: executeMode,
+		})
+	}, [])
 
 	return (
 		<Box flexDirection="column">
@@ -489,6 +550,8 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 					<ToolConfirmation details={pending.details} />
 				) : loading ? (
 					<Spinner text={loadingSpinnerText(streamingMessages)} />
+				) : awaitingPlanStart ? (
+					<PlanConfirmation onDecide={handlePlanDecision} />
 				) : (
 					<Box flexDirection="column">
 						<ChatStatusBar

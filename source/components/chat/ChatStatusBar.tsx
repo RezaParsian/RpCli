@@ -16,8 +16,9 @@ export default function ChatStatusBar({ mode, searchEnabled, thinkingEnabled, lo
 
 			<Box gap={2}>
 				<Text>
-					Mode: <Text color={mode === 'yolo' ? 'red' : mode === 'normal' ? 'yellow' : 'green'}>{mode}</Text>{' '}
-					<Text dimColor>(TAB)</Text>
+					Mode:{' '}
+					<Text color={mode === 'yolo' ? 'red' : mode === 'normal' ? 'yellow' : 'green'}>{mode}</Text>
+					{mode === 'plan' ? <Text dimColor> read-only</Text> : null} <Text dimColor>(TAB)</Text>
 				</Text>
 
 				<Text>

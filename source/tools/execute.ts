@@ -63,6 +63,16 @@ export async function executeToolCalls(
 			continue
 		}
 
+		if (mode === 'plan' && toolIsMutating(call)) {
+			results.push({
+				ok: false,
+				tool_name: call.name,
+				error:
+					'Plan mode is read-only. File changes and shell commands are blocked. Describe the plan instead. After you present a plan, wait for the user to approve it.',
+			})
+			continue
+		}
+
 		if (toolRequiresConfirmation(call, mode)) {
 			let confirmed: boolean
 			try {
@@ -93,7 +103,14 @@ export async function executeToolCalls(
 	return results
 }
 
+export function toolIsMutating(call: ToolCall): boolean {
+	if (commandNeedsElevation(call)) return true
+
+	return tools.find((tool) => tool.name === call.name)?.requiresConfirmation ?? false
+}
+
 export function toolRequiresConfirmation(call: ToolCall, mode: ToolMode): boolean {
+	if (mode === 'plan') return false
 	if (commandNeedsElevation(call)) return true
 	if (mode === 'yolo') return false
 

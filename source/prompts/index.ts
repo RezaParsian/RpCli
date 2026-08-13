@@ -57,3 +57,11 @@ export function ContinuePrompt(): string {
 export function GitCommitMessage(): string {
 	return loadPrompt('gitMessage.md')
 }
+
+export function PlanPrompt(task: string): string {
+	return loadPrompt('plan.md').replace('{{task}}', task)
+}
+
+export function ExecutePlanPrompt(mode: 'plan' | 'normal' | 'yolo'): string {
+	return loadPrompt('executePlan.md').replace('{{mode}}', mode)
+}

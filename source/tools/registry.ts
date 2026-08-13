@@ -84,7 +84,7 @@ export const tools: Tool[] = [
 	{
 		name: 'write_file',
 		description:
-			'write_file(path: string, content: string) - Creates or completely overwrites a UTF-8 file inside the current working directory.',
+			'write_file(path: string, content: string) - Creates or completely overwrites a UTF-8 file inside the current working directory. Use this when the user asks for a file; do not paste the contents in the chat.',
 		requiresConfirmation: true,
 		async execute(arguments_) {
 			const filePath = await safeTargetPath(stringArgument(arguments_, 'path'))

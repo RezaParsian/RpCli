@@ -1,7 +1,7 @@
 {
 	"name": "@rezaparsian/rp-cli",
-	"version": "0.3.4",
-	"description": "AI-powered CLI — interactive chat, single prompts, and git commit message generation",
+	"version": "0.4.0",
+	"description": "AI-powered coding CLI — interactive chat with local tools, plan/yolo modes, single prompts, and git commit messages",
 	"license": "MIT",
 	"author": {
 		"name": "RezaParsian",
@@ -18,10 +18,13 @@
 	"keywords": [
 		"cli",
 		"ai",
+		"agent",
+		"tools",
+		"plan",
 		"commit",
 		"git",
 		"ink",
-		"openai",
+		"deepseek",
 		"terminal"
 	],
 	"bin": {

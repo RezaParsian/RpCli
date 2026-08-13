@@ -40,6 +40,7 @@ You may include MULTIPLE `<tool_call>` blocks in a single response, one after an
   tool, wait for its result, then continue.
 - Escape quotes, backslashes, or newlines in multi-line values.
 - Convert literal `<` and `>` to `&lt;` / `&gt;`.
+- Paste a full file into the chat. Use `write_file` so it lands on disk.
 
 ## Constraints
 
