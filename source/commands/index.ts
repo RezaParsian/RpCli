@@ -17,6 +17,8 @@ export type SlashCommand = {
 }
 
 // Add new interactive commands here; the picker and parser update automatically.
+import { serveCommand } from './serve.js'
+
 export const slashCommands: SlashCommand[] = [
 	{
 		name: '/init',
@@ -76,6 +78,7 @@ export const slashCommands: SlashCommand[] = [
 			exit()
 		},
 	},
+	serveCommand,
 ]
 
 function commandLabel(command: SlashCommand): string {

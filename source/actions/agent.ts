@@ -14,6 +14,7 @@ export type AIResponseOptions = {
 	onChunk?: (chunk: ChatStreamChunk) => void
 	searchEnabled?: boolean
 	mode?: ChatMode
+	toolsEnabled?: boolean
 }
 
 export function getChatSystemPrompt(): string {
@@ -46,6 +47,7 @@ export async function getAIResponse({
 	onChunk,
 	searchEnabled = false,
 	mode = 'normal',
+	toolsEnabled = true,
 }: AIResponseOptions): Promise<ChatResult> {
 	beginGeneration()
 
@@ -59,6 +61,8 @@ export async function getAIResponse({
 		})
 
 	let response = await send(prompt)
+	if (!toolsEnabled) return response
+
 	let toolRounds = 0
 
 	while (true) {

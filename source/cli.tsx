@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-import React from 'react'
-import { render } from 'ink'
 import meow from 'meow'
 import dotenv from 'dotenv'
 import { tokenConfigPath } from './core/TokenConfig.js'
@@ -9,8 +7,6 @@ dotenv.config({
 	path: tokenConfigPath,
 	quiet: true,
 })
-
-const { default: App } = await import('./app.js')
 
 const cli = meow(
 	`
@@ -22,6 +18,9 @@ const cli = meow(
 	  $ rc -s <prompt>               Enable web search for a prompt
 	  $ rc -c / --commit-message     Generate commit message from staged changes
 	  $ rc -c -a                     Use git diff HEAD instead of --staged
+	  $ rc serve                     Start HTTP server with OpenAI-compatible API
+	  $ rc serve --port 8080         Start server on custom port
+	  $ rc serve --host 127.0.0.1    Bind to specific host
 
 	Options
 	  --commit-message, -c  Generate commit message from staged changes
@@ -29,6 +28,8 @@ const cli = meow(
 	  --thinking, -t        Enable thinking for a single prompt
 	  --quiet, -q           Hide thinking output from a single prompt
 	  --search, -s          Enable web search for a single prompt
+	  --port, -p            Port to listen on (default: 3000)
+	  --host, -h            Host to bind to (default: 0.0.0.0)
 	  --version             Show version
 
 	Examples
@@ -38,6 +39,8 @@ const cli = meow(
 	  $ rc -tq "say 1"
 	  $ rc -c
 	  $ rc -c -a
+	  $ rc serve
+	  $ rc serve --port 8080
 `,
 	{
 		importMeta: import.meta,
@@ -47,26 +50,42 @@ const cli = meow(
 			thinking: { type: 'boolean', shortFlag: 't' },
 			quiet: { type: 'boolean', shortFlag: 'q' },
 			search: { type: 'boolean', shortFlag: 's' },
+			port: { type: 'string', shortFlag: 'p' },
+			host: { type: 'string', shortFlag: 'h' },
 		},
 	}
 )
 
-const prompt = cli.input.join(' ').trim()
+const firstArg = cli.input[0]
 
-const mode = cli.flags.commitMessage ? 'commit' : prompt ? 'prompt' : 'interactive'
+if (firstArg === 'serve') {
+	// Start HTTP server
+	const { startServer } = await import('./server/index.js')
+	const port = cli.flags.port ? parseInt(cli.flags.port, 10) : undefined
+	const host = cli.flags.host
+	await startServer({ port, host })
+} else {
+	// Interactive or prompt mode
+	const { render } = await import('ink')
+	const { default: App } = await import('./app.js')
+	const React = await import('react')
 
-render(
-	<App
-		mode={mode}
-		commitAll={cli.flags.commitAll ?? false}
-		prompt={prompt}
-		thinking={cli.flags.thinking ?? false}
-		quiet={cli.flags.quiet ?? false}
-		search={cli.flags.search ?? false}
-		version={cli.pkg.version}
-	/>,
-	{
-		exitOnCtrlC: false,
-		kittyKeyboard: { mode: 'enabled' },
-	}
-)
+	const prompt = cli.input.join(' ').trim()
+	const mode = cli.flags.commitMessage ? 'commit' : prompt ? 'prompt' : 'interactive'
+
+	render(
+		React.createElement(App, {
+			mode,
+			commitAll: cli.flags.commitAll ?? false,
+			prompt,
+			thinking: cli.flags.thinking ?? false,
+			quiet: cli.flags.quiet ?? false,
+			search: cli.flags.search ?? false,
+			version: cli.pkg.version,
+		}),
+		{
+			exitOnCtrlC: false,
+			kittyKeyboard: { mode: 'enabled' },
+		}
+	)
+}
