@@ -1,373 +1,542 @@
-import express, { Express, Request, Response } from 'express'
 import { createServer } from 'http'
+import crypto from 'node:crypto'
 import dotenv from 'dotenv'
-import { deleteSession, type ChatStreamChunk } from '../../core-lib/index.js'
-import { tokenConfigPath } from '../core/TokenConfig.js'
-import { getAIResponse, getChatSystemPrompt } from '../actions/agent.js'
+import express, { type Express, type NextFunction, type Request, type Response } from 'express'
+import { deleteSession, isInvalidTokenError, type ChatStreamChunk } from '../../core-lib/index.js'
+import { getAIResponse } from '../actions/agent.js'
 import { getCurrentSessionId, resetChatSession, stopCurrentGeneration } from '../core/apiClient.js'
+import { tokenConfigPath } from '../core/TokenConfig.js'
 
-// Load token from config file
 dotenv.config({ path: tokenConfigPath, quiet: true })
 
-export interface ServerOptions {
+export type ServerOptions = {
 	port?: number
 	host?: string
 }
 
-interface ChatCompletionRequest {
+type ChatMessageContent =
+	| string
+	| Array<string | { type?: string; text?: string }>
+	| null
+
+type ChatMessage = {
+	role?: string
+	content?: ChatMessageContent
+	name?: string
+}
+
+type ChatCompletionRequest = {
 	model?: string
-	messages: Array<{ role: string; content: string }>
+	messages?: ChatMessage[]
 	stream?: boolean
-	session_id?: string
+	stream_options?: { include_usage?: boolean }
+	n?: number
 	thinking_enabled?: boolean
 	search_enabled?: boolean
 	temperature?: number
 	max_tokens?: number
 }
 
-interface ConversationRequest {
-	metadata?: { [key: string]: string }
+type CompletionUsage = {
+	prompt_tokens: number
+	completion_tokens: number
+	total_tokens: number
 }
 
-interface ChatCompletionResponse {
-	id: string
-	object: string
-	created: number
-	model: string
-	choices: Array<{
-		index: number
-		message: {
-			role: string
-			content: string
-		}
-		finish_reason: string | null
-	}>
-	usage?: {
-		prompt_tokens: number
-		completion_tokens: number
-		total_tokens: number
-	}
+const MODELS = [
+	{ id: 'deepseek-chat', owned_by: 'deepseek' },
+	{ id: 'deepseek-reasoner', owned_by: 'deepseek' },
+] as const
+
+const MODEL_CREATED = 1_704_067_200
+
+let completionQueue: Promise<void> = Promise.resolve()
+
+function enqueue<T>(task: () => Promise<T>): Promise<T> {
+	const run = completionQueue.then(task, task)
+	completionQueue = run.then(
+		() => undefined,
+		() => undefined
+	)
+	return run
 }
 
 function generateId(): string {
-	return 'chatcmpl-' + Date.now().toString(36) + Math.random().toString(36).substring(2, 9)
+	return `chatcmpl-${crypto.randomBytes(12).toString('hex')}`
 }
 
-function getToken(): string {
-	// Read token from env or config
-	const token = process.env['DEEPSEEK_TOKEN'] || process.env['RC_TOKEN']
-	if (!token) {
-		throw new Error('No token found. Set DEEPSEEK_TOKEN or RC_TOKEN environment variable.')
+function extractBearer(req: Request): string | undefined {
+	const header = req.header('authorization')
+	if (!header) return undefined
+
+	const match = /^Bearer\s+(\S+)/i.exec(header)
+	return match?.[1]
+}
+
+function getToken(req: Request): string {
+	const configured = process.env['DEEPSEEK_TOKEN'] || process.env['RC_TOKEN']
+	if (configured) return configured
+
+	const bearer = extractBearer(req)
+	if (bearer) return bearer
+
+	throw new ApiError(
+		401,
+		"You didn't provide an API key. Set DEEPSEEK_TOKEN or pass Authorization: Bearer <token>.",
+		'invalid_request_error',
+		'invalid_api_key'
+	)
+}
+
+function modelRecord(id: string) {
+	return {
+		id,
+		object: 'model' as const,
+		created: MODEL_CREATED,
+		owned_by: MODELS.find((model) => model.id === id)?.owned_by ?? 'deepseek',
 	}
-	return token
 }
 
-function getServeSystemPrompt(): string {
-	return `${getChatSystemPrompt()}\n\nHTTP serve mode is inference-only. Do not request or invoke tools; answer directly.`
+function resolveModel(model: string | undefined): { id: string; thinkingEnabled: boolean } {
+	if (!model || model === 'deepseek-chat') {
+		return { id: 'deepseek-chat', thinkingEnabled: false }
+	}
+
+	if (model === 'deepseek-reasoner' || /reasoner|\br1\b/i.test(model)) {
+		return { id: model, thinkingEnabled: true }
+	}
+
+	return { id: model, thinkingEnabled: false }
 }
 
-function sendError(res: Response, status: number, message: string, code: string | null = null): void {
-	res.status(status).json({
+function messageText(content: ChatMessageContent | undefined): string {
+	if (content == null) return ''
+	if (typeof content === 'string') return content
+	if (!Array.isArray(content)) return String(content)
+
+	return content
+		.map((part) => {
+			if (typeof part === 'string') return part
+			if (part && typeof part.text === 'string') return part.text
+			return ''
+		})
+		.filter(Boolean)
+		.join('\n')
+}
+
+function buildCompletionPrompt(messages: ChatMessage[]): string {
+	const normalized = messages
+		.map((message) => ({
+			role: (message.role || 'user').toLowerCase(),
+			content: messageText(message.content).trim(),
+		}))
+		.filter((message) => message.content.length > 0)
+
+	if (normalized.length === 0) {
+		throw new ApiError(
+			400,
+			"'messages' must contain at least one message with content",
+			'invalid_request_error',
+			'invalid_messages',
+			'messages'
+		)
+	}
+
+	const dialogue = normalized.filter((message) => message.role !== 'system' && message.role !== 'developer')
+	if (dialogue.length === 0) {
+		throw new ApiError(
+			400,
+			"'messages' must include a user message",
+			'invalid_request_error',
+			'invalid_messages',
+			'messages'
+		)
+	}
+
+	if (normalized.length === 1 && dialogue[0]?.role === 'user') {
+		return dialogue[0].content
+	}
+
+	return normalized
+		.map((message) => {
+			const role = message.role === 'developer' ? 'system' : message.role
+			return `${role}:\n${message.content}`
+		})
+		.join('\n\n')
+}
+
+function toUsage(tokenUsage: unknown): CompletionUsage | undefined {
+	if (!tokenUsage || typeof tokenUsage !== 'object') return undefined
+
+	const usage = tokenUsage as Record<string, unknown>
+	const promptTokens = Number(usage['prompt_tokens'] ?? usage['input_tokens'] ?? 0) || 0
+	const completionTokens = Number(usage['completion_tokens'] ?? usage['output_tokens'] ?? 0) || 0
+	const totalTokens = Number(usage['total_tokens'] ?? usage['total'] ?? promptTokens + completionTokens) || 0
+
+	if (promptTokens === 0 && completionTokens === 0 && totalTokens === 0) return undefined
+
+	return {
+		prompt_tokens: promptTokens,
+		completion_tokens: completionTokens,
+		total_tokens: totalTokens,
+	}
+}
+
+class ApiError extends Error {
+	status: number
+	type: string
+	code: string | null
+	param: string | null
+
+	constructor(status: number, message: string, type: string, code: string | null = null, param: string | null = null) {
+		super(message)
+		this.name = 'ApiError'
+		this.status = status
+		this.type = type
+		this.code = code
+		this.param = param
+	}
+}
+
+function errorBody(error: ApiError) {
+	return {
 		error: {
-			message,
-			type: status >= 500 ? 'server_error' : 'invalid_request_error',
-			param: null,
-			code,
+			message: error.message,
+			type: error.type,
+			param: error.param,
+			code: error.code,
 		},
+	}
+}
+
+function sendError(res: Response, error: ApiError): void {
+	if (res.headersSent) {
+		res.end()
+		return
+	}
+
+	res.status(error.status).json(errorBody(error))
+}
+
+function toApiError(error: unknown): ApiError {
+	if (error instanceof ApiError) return error
+	if (isInvalidTokenError(error)) {
+		return new ApiError(401, 'Invalid API key provided.', 'invalid_request_error', 'invalid_api_key')
+	}
+
+	const message = error instanceof Error ? error.message : String(error)
+	return new ApiError(500, message || 'Internal server error', 'server_error')
+}
+
+function cors(_req: Request, res: Response, next: NextFunction): void {
+	res.setHeader('Access-Control-Allow-Origin', '*')
+	res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+	res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, OpenAI-Beta')
+	res.setHeader('Access-Control-Max-Age', '86400')
+	next()
+}
+
+function writeSse(res: Response, payload: unknown): void {
+	res.write(`data: ${JSON.stringify(payload)}\n\n`)
+}
+
+function streamChunk(
+	res: Response,
+	id: string,
+	created: number,
+	model: string,
+	delta: Record<string, unknown>,
+	finishReason: string | null = null
+): void {
+	writeSse(res, {
+		id,
+		object: 'chat.completion.chunk',
+		created,
+		model,
+		system_fingerprint: null,
+		choices: [
+			{
+				index: 0,
+				delta,
+				logprobs: null,
+				finish_reason: finishReason,
+			},
+		],
 	})
+}
+
+async function runIsolatedCompletion(options: {
+	token: string
+	prompt: string
+	thinkingEnabled: boolean
+	searchEnabled: boolean
+	onChunk?: (chunk: ChatStreamChunk) => void
+	shouldAbort: () => boolean
+}) {
+	await stopCurrentGeneration(options.token)
+	const previousSessionId = getCurrentSessionId()
+	if (previousSessionId) {
+		await deleteSession(options.token, previousSessionId).catch(() => undefined)
+	}
+
+	resetChatSession()
+
+	try {
+		if (options.shouldAbort()) {
+			return { stopped: true, ok: true, sessionId: '', content: '', thinkingContent: '' }
+		}
+
+		return await getAIResponse({
+			token: options.token,
+			prompt: options.prompt,
+			thinkingEnabled: options.thinkingEnabled,
+			searchEnabled: options.searchEnabled,
+			onChunk: options.onChunk,
+			toolsEnabled: false,
+		})
+	} finally {
+		// const sessionId = getCurrentSessionId()
+		resetChatSession()
+		// if (sessionId) {
+			// await deleteSession(options.token, sessionId).catch(() => undefined)
+		// }
+	}
 }
 
 export async function startServer(options: ServerOptions = {}): Promise<void> {
-	const port = options.port || parseInt(process.env['PORT'] || '3000', 10)
+	const parsedPort = options.port ?? Number.parseInt(process.env['PORT'] || '3000', 10)
+	const port = Number.isInteger(parsedPort) && parsedPort >= 1 && parsedPort <= 65_535 ? parsedPort : 3000
 	const host = options.host || process.env['HOST'] || '0.0.0.0'
+	const displayHost = host === '0.0.0.0' || host === '::' ? '127.0.0.1' : host
 
 	const app: Express = express()
+	app.use(cors)
 	app.use(express.json({ limit: '10mb' }))
-
-	// Health check
-	app.get('/health', (_req: Request, res: Response) => {
-		res.json({ status: 'ok', timestamp: new Date().toISOString() })
+	app.options('*', (_req: Request, res: Response) => {
+		res.status(204).end()
 	})
 
-	// Start a fresh DeepSeek conversation and initialize it with the CLI system prompt.
-	const createConversation = async (req: Request, res: Response) => {
+	app.get('/health', (_req: Request, res: Response) => {
+		res.json({ status: 'ok', object: 'health', timestamp: new Date().toISOString() })
+	})
+
+	app.get(['/v1/models', '/models'], (_req: Request, res: Response) => {
+		res.json({
+			object: 'list',
+			data: MODELS.map((model) => modelRecord(model.id)),
+		})
+	})
+
+	app.get(['/v1/models/:id', '/models/:id'], (req: Request, res: Response) => {
+		const id = req.params['id']
+		res.json(modelRecord(typeof id === 'string' ? id : id?.[0] ?? 'deepseek-chat'))
+	})
+
+	app.post(['/v1/chat/completions', '/chat/completions'], async (req: Request, res: Response) => {
+		let clientDisconnected = false
+
+		res.on('close', () => {
+			if (!res.writableEnded) clientDisconnected = true
+		})
+
 		try {
-			const body = req.body as ConversationRequest
-			const token = getToken()
-			const previousSessionId = getCurrentSessionId()
-
-			await stopCurrentGeneration(token)
-			if (previousSessionId) {
-				await deleteSession(token, previousSessionId)
-			}
-
-			resetChatSession()
-			const result = await getAIResponse({
-				token,
-				prompt: getServeSystemPrompt(),
-				thinkingEnabled: false,
-				searchEnabled: false,
-				toolsEnabled: false,
-			})
-
-			res.json({
-				id: result.sessionId,
-				object: 'conversation',
-				created_at: Math.floor(Date.now() / 1000),
-				metadata: body.metadata ?? {},
-			})
-		} catch (error: any) {
-			console.error('Failed to create conversation:', error)
-			sendError(res, 500, error.message || 'Failed to create conversation')
-		}
-	}
-
-	app.post('/v1/conversations', createConversation)
-	app.post('/v1/conversations/new', createConversation)
-
-	// OpenAI compatible endpoint using agent
-	app.post('/v1/chat/completions', async (req: Request, res: Response) => {
-		try {
-			const body = req.body as ChatCompletionRequest
-
-			// Validate required fields
-			if (!body.messages || !Array.isArray(body.messages) || body.messages.length === 0) {
-				sendError(res, 400, 'messages is required and must be a non-empty array', 'invalid_messages')
-				return
-			}
-
-			// Extract the last user message as prompt
-			const lastMessage = body.messages[body.messages.length - 1]
-			if (lastMessage?.role !== 'user') {
-				sendError(res, 400, 'The last message must be from the user', 'invalid_messages')
-				return
-			}
-
-			const prompt = lastMessage.content
-			const token = getToken()
-			const thinkingEnabled = body.thinking_enabled ?? false
-			const searchEnabled = body.search_enabled ?? false
-			const stream = body.stream === true
-			const completionId = generateId()
-			const completionCreated = Math.floor(Date.now() / 1000)
-			const responseModel = body.model || 'deepseek-chat'
-
-			// Stop the upstream generation only when the response connection closes
-			// prematurely. The request's `close` event can fire after Express has read
-			// the request body, even though the client is still waiting for a response.
-			let generationStarted = false
-			let clientDisconnected = false
-
-			res.on('close', () => {
-				if (!res.writableEnded) {
-					clientDisconnected = true
-				}
-
-				if (clientDisconnected && generationStarted) {
-					console.log('Client disconnected, stopping generation...')
-					stopCurrentGeneration(token).catch(console.error)
-				}
-			})
-
-			// For streaming, we need to send SSE headers
-			if (stream) {
-				res.setHeader('Content-Type', 'text/event-stream')
-				res.setHeader('Cache-Control', 'no-cache')
-				res.setHeader('Connection', 'keep-alive')
-				res.flushHeaders()
-				res.write(
-					`data: ${JSON.stringify({
-						id: completionId,
-						object: 'chat.completion.chunk',
-						created: completionCreated,
-						model: responseModel,
-						choices: [{ index: 0, delta: { role: 'assistant' }, finish_reason: null }],
-					})}\n\n`
+			const body = (req.body ?? {}) as ChatCompletionRequest
+			if (!Array.isArray(body.messages) || body.messages.length === 0) {
+				throw new ApiError(
+					400,
+					"'messages' is a required property",
+					'invalid_request_error',
+					'invalid_messages',
+					'messages'
 				)
 			}
 
-			// We'll accumulate content for non-streaming
+			if (body.n != null && body.n !== 1) {
+				throw new ApiError(400, 'Only n=1 is supported', 'invalid_request_error', 'unsupported_value', 'n')
+			}
+
+			const prompt = buildCompletionPrompt(body.messages)
+			const token = getToken(req)
+			const resolved = resolveModel(body.model)
+			const thinkingEnabled = body.thinking_enabled ?? resolved.thinkingEnabled
+			const searchEnabled = body.search_enabled ?? false
+			const stream = body.stream === true
+			const includeUsage = body.stream_options?.include_usage === true
+			const completionId = generateId()
+			const created = Math.floor(Date.now() / 1000)
+			const responseModel = body.model || resolved.id
+
 			let fullContent = ''
 			let fullThinking = ''
 
-			// onChunk callback
 			const onChunk = (chunk: ChatStreamChunk) => {
-				if (chunk.type === 'response') {
-					fullContent += chunk.content
-					if (stream && !clientDisconnected) {
-						const data = {
-							id: completionId,
-							object: 'chat.completion.chunk',
-							created: completionCreated,
-							model: responseModel,
-							choices: [
-								{
-									index: 0,
-									delta: { content: chunk.content },
-									finish_reason: null,
-								},
-							],
-						}
-						res.write(`data: ${JSON.stringify(data)}\n\n`)
-					}
-				} else if (chunk.type === 'thinking') {
+				if (chunk.type === 'thinking') {
 					fullThinking += chunk.content
-					// Optionally send thinking as delta? Not standard; we'll skip for now.
+					if (stream && !clientDisconnected && chunk.content) {
+						streamChunk(res, completionId, created, responseModel, { reasoning_content: chunk.content })
+					}
+
+					return
+				}
+
+				fullContent += chunk.content
+				if (stream && !clientDisconnected && chunk.content) {
+					streamChunk(res, completionId, created, responseModel, { content: chunk.content })
 				}
 			}
 
-			// Initialize the DeepSeek session with the same system prompt used by the CLI.
-			generationStarted = true
-			await getAIResponse({
-				token,
-				prompt: getServeSystemPrompt(),
-				thinkingEnabled,
-				searchEnabled,
-				toolsEnabled: false,
-			})
+			if (stream) {
+				res.status(200)
+				res.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
+				res.setHeader('Cache-Control', 'no-cache, no-transform')
+				res.setHeader('Connection', 'keep-alive')
+				res.setHeader('X-Accel-Buffering', 'no')
+				res.flushHeaders()
+				streamChunk(res, completionId, created, responseModel, { role: 'assistant', content: '' })
+			}
 
-			if (clientDisconnected) return
+			const result = await enqueue(async () => {
+				if (clientDisconnected) {
+					return { stopped: true, ok: true, sessionId: '', content: '', thinkingContent: '' }
+				}
 
-			// Send the user's prompt after the system prompt has established the session.
-			const result = await getAIResponse({
-				token,
-				prompt,
-				thinkingEnabled,
-				searchEnabled,
-				onChunk,
-				toolsEnabled: false,
-			})
-			generationStarted = false
-
-			if (clientDisconnected) return
-
-			// After generation completes
-			if (result.stopped) {
-				// If stopped due to abort or client disconnect
-				if (stream) {
-					const finalData = {
-						id: completionId,
-						object: 'chat.completion.chunk',
-						created: completionCreated,
-						model: responseModel,
-						choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
+				try {
+					return await runIsolatedCompletion({
+						token,
+						prompt,
+						thinkingEnabled,
+						searchEnabled,
+						onChunk,
+						shouldAbort: () => clientDisconnected,
+					})
+				} finally {
+					if (clientDisconnected) {
+						await stopCurrentGeneration(token).catch(() => undefined)
 					}
-					res.write(`data: ${JSON.stringify(finalData)}\n\n`)
+				}
+			})
+
+			if (clientDisconnected) return
+
+			if (result.stopped) {
+				if (stream) {
+					streamChunk(res, completionId, created, responseModel, {}, 'stop')
 					res.write('data: [DONE]\n\n')
 					res.end()
-				} else {
-					res.status(504).json({
-						error: 'Request timed out or was aborted',
-						message: 'The request was interrupted.',
-					})
+					return
 				}
-				return
+
+				throw new ApiError(504, 'The request was interrupted.', 'server_error', 'timeout')
 			}
 
 			if (!result.ok) {
-				const errorMessage = result.error || 'Unknown error from DeepSeek API'
-				if (stream) {
-					const errorData = {
+				throw new ApiError(500, result.error || 'The model produced an error.', 'server_error')
+			}
+
+			const content = fullContent || result.content || ''
+			const reasoning = fullThinking || result.thinkingContent || ''
+			const usage = toUsage(result.tokenUsage)
+
+			if (stream) {
+				streamChunk(res, completionId, created, responseModel, {}, 'stop')
+				if (includeUsage) {
+					writeSse(res, {
 						id: completionId,
 						object: 'chat.completion.chunk',
-						created: completionCreated,
+						created,
 						model: responseModel,
-						choices: [{ index: 0, delta: {}, finish_reason: 'error' }],
-						error: errorMessage,
-						bizCode: result.bizCode,
-					}
-					res.write(`data: ${JSON.stringify(errorData)}\n\n`)
-					res.write('data: [DONE]\n\n')
-					res.end()
-				} else {
-					res.status(500).json({
-						error: errorMessage,
-						bizCode: result.bizCode,
+						system_fingerprint: null,
+						choices: [],
+						usage: usage ?? { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
 					})
 				}
+
+				res.write('data: [DONE]\n\n')
+				res.end()
 				return
 			}
 
-			// Success
-			if (stream) {
-				// Send final chunk with usage if available
-				const finalData: any = {
-					id: completionId,
-					object: 'chat.completion.chunk',
-					created: completionCreated,
-					model: responseModel,
-					choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
-				}
-				if (result.tokenUsage) {
-					finalData.usage = {
-						prompt_tokens: result.tokenUsage.prompt_tokens || 0,
-						completion_tokens: result.tokenUsage.completion_tokens || 0,
-						total_tokens: result.tokenUsage.total_tokens || 0,
-					}
-				}
-				res.write(`data: ${JSON.stringify(finalData)}\n\n`)
+			res.json({
+				id: completionId,
+				object: 'chat.completion',
+				created,
+				model: responseModel,
+				system_fingerprint: null,
+				choices: [
+					{
+						index: 0,
+						message: {
+							role: 'assistant',
+							content,
+							...(thinkingEnabled || reasoning ? { reasoning_content: reasoning || null } : {}),
+							refusal: null,
+						},
+						logprobs: null,
+						finish_reason: 'stop',
+					},
+				],
+				usage: usage ?? {
+					prompt_tokens: 0,
+					completion_tokens: 0,
+					total_tokens: 0,
+				},
+			})
+		} catch (error: unknown) {
+			const apiError = toApiError(error)
+			if (apiError.status >= 500) console.error('Request error:', error)
+
+			if (res.headersSent) {
+				writeSse(res, errorBody(apiError))
 				res.write('data: [DONE]\n\n')
 				res.end()
-			} else {
-				// Build non-streaming response
-				const response: ChatCompletionResponse = {
-					id: completionId,
-					object: 'chat.completion',
-					created: completionCreated,
-					model: responseModel,
-					choices: [
-						{
-							index: 0,
-							message: {
-								role: 'assistant',
-								content: fullContent || result.content || '',
-							},
-							finish_reason: 'stop',
-						},
-					],
-				}
-				if (result.tokenUsage) {
-					response.usage = {
-						prompt_tokens: result.tokenUsage.prompt_tokens || 0,
-						completion_tokens: result.tokenUsage.completion_tokens || 0,
-						total_tokens: result.tokenUsage.total_tokens || 0,
-					}
-				}
-				res.json(response)
+				return
 			}
-		} catch (error: any) {
-			console.error('Request error:', error)
-			if (!res.headersSent) {
-				sendError(res, 500, error.message || 'Internal server error')
-			} else {
-				res.end()
-			}
+
+			sendError(res, apiError)
 		}
+	})
+
+	app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
+		if (error instanceof SyntaxError) {
+			sendError(
+				res,
+				new ApiError(
+					400,
+					`We could not parse the JSON body of your request: ${error.message}`,
+					'invalid_request_error',
+					'invalid_json'
+				)
+			)
+			return
+		}
+
+		sendError(res, toApiError(error))
+	})
+
+	app.use((req: Request, res: Response) => {
+		sendError(res, new ApiError(404, `Invalid URL (${req.method} ${req.path})`, 'invalid_request_error', 'invalid_url'))
 	})
 
 	const server = createServer(app)
 
-	server.listen(port, host, () => {
-		console.log(`🚀 RP-CLI HTTP server running on http://${host}:${port}`)
-		console.log(`📡 OpenAI-compatible endpoint: http://${host}:${port}/v1/chat/completions`)
-		console.log(`🆕 New conversation endpoint: http://${host}:${port}/v1/conversations`)
-		console.log(`🔑 Set DEEPSEEK_TOKEN or RC_TOKEN environment variable for authentication`)
-	})
-
-	// Graceful shutdown
-	process.on('SIGTERM', () => {
-		console.log('SIGTERM signal received: closing HTTP server')
-		server.close(() => {
-			console.log('HTTP server closed')
-			process.exit(0)
+	await new Promise<void>((resolve, reject) => {
+		server.once('error', reject)
+		server.listen(port, host, () => {
+			server.removeListener('error', reject)
+			console.log(`RP-CLI OpenAI-compatible API listening on http://${displayHost}:${port}/v1`)
+			console.log(`  POST /v1/chat/completions`)
+			console.log(`  GET  /v1/models`)
+			resolve()
 		})
 	})
 
-	process.on('SIGINT', () => {
-		console.log('SIGINT signal received: closing HTTP server')
+	const shutdown = () => {
+		console.log('Closing HTTP server')
 		server.close(() => {
-			console.log('HTTP server closed')
 			process.exit(0)
 		})
-	})
+	}
+
+	process.on('SIGTERM', shutdown)
+	process.on('SIGINT', shutdown)
 }

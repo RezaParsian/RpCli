@@ -18,7 +18,7 @@ const cli = meow(
 	  $ rc -s <prompt>               Enable web search for a prompt
 	  $ rc -c / --commit-message     Generate commit message from staged changes
 	  $ rc -c -a                     Use git diff HEAD instead of --staged
-	  $ rc serve                     Start HTTP server with OpenAI-compatible API
+	$ rc serve                     Start an OpenAI-compatible HTTP API
 	  $ rc serve --port 8080         Start server on custom port
 	  $ rc serve --host 127.0.0.1    Bind to specific host
 
@@ -29,7 +29,7 @@ const cli = meow(
 	  --quiet, -q           Hide thinking output from a single prompt
 	  --search, -s          Enable web search for a single prompt
 	  --port, -p            Port to listen on (default: 3000)
-	  --host, -h            Host to bind to (default: 0.0.0.0)
+	  --host                Host to bind to (default: 0.0.0.0)
 	  --version             Show version
 
 	Examples
@@ -51,7 +51,7 @@ const cli = meow(
 			quiet: { type: 'boolean', shortFlag: 'q' },
 			search: { type: 'boolean', shortFlag: 's' },
 			port: { type: 'string', shortFlag: 'p' },
-			host: { type: 'string', shortFlag: 'h' },
+			host: { type: 'string' },
 		},
 	}
 )

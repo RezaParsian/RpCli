@@ -21,6 +21,8 @@ rc -s "your question"         Enable web search
 rc -st "your question"        Enable web search and thinking
 rc -c                         Generate a commit message from staged changes
 rc -c -a                      Generate a commit message from all changes (HEAD)
+rc serve                      Start an OpenAI-compatible HTTP API
+rc serve --port 8080          Listen on a custom port
 ```
 
 ### Options
@@ -32,12 +34,50 @@ rc -c -a                      Generate a commit message from all changes (HEAD)
 | `-s`, `--search`         | Enable web search for a single prompt.                 |
 | `-c`, `--commit-message` | Generate a commit message from staged changes.         |
 | `-a`, `--commit-all`     | Use all changes from `HEAD` instead of staged changes. |
+| `-p`, `--port`           | Port for `rc serve` (default: `3000`).                 |
+| `--host`                 | Bind address for `rc serve` (default: `0.0.0.0`).      |
 
 To save only the final answer while allowing the model to think:
 
 ```bash
 rc -tq "write documentation for this project" > documentation.md
 ```
+
+## OpenAI-compatible API
+
+`rc serve` exposes a local OpenAI Chat Completions API in front of DeepSeek. Point any OpenAI SDK or client at it.
+
+```
+rc serve
+rc serve --port 8080 --host 127.0.0.1
+```
+
+| Endpoint                     | Description                         |
+| ---------------------------- | ----------------------------------- |
+| `POST /v1/chat/completions`  | Chat completion (streaming or not). |
+| `GET /v1/models`             | List models.                        |
+| `GET /v1/models/:id`         | Retrieve a model.                   |
+| `GET /health`                | Liveness check.                     |
+
+Models: `deepseek-chat` (default) and `deepseek-reasoner` (thinking / `reasoning_content`). Requests use the token from `~/.config/rp-cli/.env`, or `Authorization: Bearer <token>` if no config token is set.
+
+```bash
+curl http://127.0.0.1:3000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"deepseek-chat","messages":[{"role":"user","content":"Hello"}]}'
+```
+
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="http://127.0.0.1:3000/v1", api_key="not-needed")
+print(client.chat.completions.create(
+    model="deepseek-chat",
+    messages=[{"role": "user", "content": "Hello"}],
+).choices[0].message.content)
+```
+
+Each request is stateless, like OpenAI: the client sends the full `messages` array, including optional `system` turns. `stream: true` returns SSE chunks ending with `data: [DONE]`. Extra fields `thinking_enabled` and `search_enabled` are accepted.
 
 ## Interactive chat
 
