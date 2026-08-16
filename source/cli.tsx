@@ -29,7 +29,7 @@ const cli = meow(
 	  --quiet, -q           Hide thinking output from a single prompt
 	  --search, -s          Enable web search for a single prompt
 	  --port, -p            Port to listen on (default: 3000)
-	  --host                Host to bind to (default: 0.0.0.0)
+	  --host                Host to bind to (default: 127.0.0.1)
 	  --version             Show version
 
 	Examples

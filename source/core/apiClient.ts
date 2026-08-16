@@ -60,6 +60,18 @@ export function getCurrentSessionId(): string | undefined {
 	return sessionId
 }
 
+export function setCurrentSessionId(nextSessionId: string): void {
+	sessionId = nextSessionId
+	parentMessageId = null
+	generationAbort = null
+	lastStreamMessageId = null
+}
+
+export async function chatSessionExists(token: string, targetSessionId: string): Promise<boolean> {
+	const sessions = await chatSessions(token)
+	return sessions.some((session) => session.id === targetSessionId)
+}
+
 export default async function sendMessage({
 	token,
 	prompt,

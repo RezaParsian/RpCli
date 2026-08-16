@@ -46,6 +46,18 @@ export function SystemPrompt(): string {
 	return systemPrompt
 }
 
+export function ServerSystemPrompt(): string {
+	let systemPrompt = loadPrompt('server.md').replace('{{platform}}', process.platform).replace('{{cwd}}', process.cwd())
+	const agentPrompt = readAgentsMarkdown()
+
+	if (agentPrompt !== '')
+		systemPrompt +=
+			"\n\n---\n\n# Project-Specific Context (from this repository's AGENTS.md — treat as ground truth for this project)\n\n" +
+			agentPrompt
+
+	return systemPrompt
+}
+
 export function InitPrompt(): string {
 	return loadPrompt('init.md')
 }

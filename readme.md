@@ -35,7 +35,7 @@ rc serve --port 8080          Listen on a custom port
 | `-c`, `--commit-message` | Generate a commit message from staged changes.         |
 | `-a`, `--commit-all`     | Use all changes from `HEAD` instead of staged changes. |
 | `-p`, `--port`           | Port for `rc serve` (default: `3000`).                 |
-| `--host`                 | Bind address for `rc serve` (default: `0.0.0.0`).      |
+| `--host`                 | Bind address for `rc serve` (default: `127.0.0.1`).    |
 
 To save only the final answer while allowing the model to think:
 
@@ -52,12 +52,11 @@ rc serve
 rc serve --port 8080 --host 127.0.0.1
 ```
 
-| Endpoint                     | Description                         |
-| ---------------------------- | ----------------------------------- |
-| `POST /v1/chat/completions`  | Chat completion (streaming or not). |
-| `GET /v1/models`             | List models.                        |
-| `GET /v1/models/:id`         | Retrieve a model.                   |
-| `GET /health`                | Liveness check.                     |
+| Endpoint                                   | Description                                      |
+| ------------------------------------------ | ------------------------------------------------ |
+| `POST /v1/chat/completions`                | Continue the current conversation.               |
+| `POST /v1/chat/completions/:sessionId`     | Continue a specific DeepSeek session.            |
+| `GET /health`                              | Liveness check.                                  |
 
 Models: `deepseek-chat` (default) and `deepseek-reasoner` (thinking / `reasoning_content`). Requests use the token from `~/.config/rp-cli/.env`, or `Authorization: Bearer <token>` if no config token is set.
 
@@ -77,7 +76,18 @@ print(client.chat.completions.create(
 ).choices[0].message.content)
 ```
 
-Each request is stateless, like OpenAI: the client sends the full `messages` array, including optional `system` turns. `stream: true` returns SSE chunks ending with `data: [DONE]`. Extra fields `thinking_enabled` and `search_enabled` are accepted.
+The server keeps a persistent conversation and sends only the final item in each `messages` array. Use the
+`:sessionId` endpoint to select an existing DeepSeek conversation. `stream: true` returns SSE chunks ending with
+`data: [DONE]`. Successful completion responses include the active session in the `X-RP-Session-Id` header. Extra
+fields `thinking_enabled` and `search_enabled` are accepted.
+
+The OpenAI-compatible `reasoning_effort` field is also accepted. `none` and `minimal` disable DeepSeek thinking; `low`,
+`medium`, `high`, `xhigh`, and `max` enable it. DeepSeek exposes thinking as a boolean, so enabled effort levels do not
+produce different reasoning depths. When both fields are present, `thinking_enabled` takes precedence.
+
+Client-defined function tools are supported through the OpenAI `tools` and `tool_choice` fields. RP-CLI returns
+`finish_reason: "tool_calls"` and does not execute these functions. Execute the requested function in the client, then
+send its result as the final message with `role: "tool"` and the matching `tool_call_id`.
 
 ## Interactive chat
 
