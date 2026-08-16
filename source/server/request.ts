@@ -106,7 +106,12 @@ export function validateTools(tools: FunctionTool[] | undefined): FunctionTool[]
 	return tools
 }
 
-export function withToolInstructions(prompt: string, tools: FunctionTool[], choice: ToolChoice | undefined): string {
+export function withToolInstructions(
+	prompt: string,
+	tools: FunctionTool[],
+	choice: ToolChoice | undefined,
+	includeDefinitions = true
+): string {
 	if (tools.length === 0 || choice === 'none') return prompt
 	if (
 		choice !== undefined &&
@@ -133,12 +138,57 @@ export function withToolInstructions(prompt: string, tools: FunctionTool[], choi
 
 		choiceInstruction = `You must call the function named "${selectedName}".`
 	}
+	if (!includeDefinitions && (choice === undefined || choice === 'auto')) return prompt
+	if (!includeDefinitions) return `${prompt}\n\n${choiceInstruction}`
 
 	return `${prompt}\n\nAvailable client functions:\n${JSON.stringify(
 		tools,
 		null,
 		2
-	)}\n\n${choiceInstruction}\nThe client, not you, executes functions. To call one or more functions, output only one block per call in this exact format:\n<function_call name="function_name">{"argument":"value"}</function_call>\nThe block body must be one valid JSON object matching the function parameters. Do not use Markdown fences.`
+	)}\n\n${choiceInstruction}\nThe client, not you, executes functions. To call one or more functions, output only one block per call in this exact format:\n<function_call name="function_name">\n<argument name="argument_name">\nraw argument value\n</argument>\n</function_call>\nUse one <argument> block for each function parameter. Put multiline code directly inside its argument block with its original indentation; do not quote it, JSON-escape it, or wrap it in Markdown fences. The content must be executable code, not prose or un-commented explanations.`
+}
+
+function argumentValue(rawValue: string): unknown {
+	const value = rawValue.replace(/^\r?\n/, '').replace(/\r?\n\s*$/, '')
+	try {
+		return JSON.parse(value)
+	} catch {
+		return value
+	}
+}
+
+function parseXmlArguments(rawArguments: string): Record<string, unknown> {
+	const arguments_: Record<string, unknown> = {}
+	const argumentPattern = /<argument\s+name="([^"]+)">([\s\S]*?)<\/argument>/g
+	let argumentMatch: RegExpExecArray | null
+
+	while ((argumentMatch = argumentPattern.exec(rawArguments)) !== null) {
+		const name = argumentMatch[1]
+		const value = argumentMatch[2]
+		if (name && value !== undefined) arguments_[name] = argumentValue(value)
+	}
+
+	return arguments_
+}
+
+function replaceTripleQuotedStrings(value: string): string {
+	return value.replace(/("""|''')([\s\S]*?)\1/g, (_match, _quote: string, content: string) => {
+		const normalized = content.replace(/^\r?\n/, '').replace(/\r?\n\s*$/, '')
+		return JSON.stringify(normalized)
+	})
+}
+
+function parseJsonArguments(rawArguments: string): unknown {
+	const withoutFence = rawArguments
+		.trim()
+		.replace(/^```(?:json)?\s*/i, '')
+		.replace(/\s*```$/, '')
+
+	try {
+		return JSON.parse(withoutFence)
+	} catch {
+		return JSON.parse(replaceTripleQuotedStrings(withoutFence))
+	}
 }
 
 export function parseClientToolCalls(content: string): { content: string; calls: ClientToolCall[] } {
@@ -152,15 +202,28 @@ export function parseClientToolCalls(content: string): { content: string; calls:
 		if (!name || rawArguments === undefined) continue
 
 		let parsedArguments: unknown
-		try {
-			parsedArguments = JSON.parse(rawArguments)
-		} catch {
-			throw new ApiError(
-				500,
-				`The model returned invalid arguments for function "${name}"`,
-				'server_error',
-				'invalid_tool_arguments'
-			)
+		if (rawArguments.includes('<argument')) {
+			const xmlArguments = parseXmlArguments(rawArguments)
+			if (Object.keys(xmlArguments).length === 0) {
+				throw new ApiError(
+					500,
+					`The model returned malformed arguments for function "${name}"`,
+					'server_error',
+					'invalid_tool_arguments'
+				)
+			}
+			parsedArguments = xmlArguments
+		} else {
+			try {
+				parsedArguments = parseJsonArguments(rawArguments)
+			} catch {
+				throw new ApiError(
+					500,
+					`The model returned invalid arguments for function "${name}"`,
+					'server_error',
+					'invalid_tool_arguments'
+				)
+			}
 		}
 
 		if (!parsedArguments || typeof parsedArguments !== 'object' || Array.isArray(parsedArguments)) {

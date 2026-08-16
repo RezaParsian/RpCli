@@ -16,7 +16,7 @@ import {
 	validateTools,
 	withToolInstructions,
 } from './request.js'
-import { enqueueCompletion, runCompletion } from './session.js'
+import { enqueueCompletion, getSessionTools, rememberSessionTools, runCompletion } from './session.js'
 import { streamChunk, writeSse } from './stream.js'
 import { type ChatCompletionRequest, type ServerOptions } from './types.js'
 
@@ -63,14 +63,17 @@ export async function startServer(options: ServerOptions = {}): Promise<void> {
 				throw new ApiError(400, 'Only n=1 is supported', 'invalid_request_error', 'unsupported_value', 'n')
 			}
 
-			const tools = validateTools(body.tools)
-			const prompt = withToolInstructions(buildCompletionPrompt(body.messages), tools, body.tool_choice)
 			const token = getToken(req)
 			const requestedSessionId = req.params['sessionId']
 			const sessionId = typeof requestedSessionId === 'string' ? requestedSessionId.trim() : undefined
 			if (requestedSessionId !== undefined && !sessionId) {
 				throw new ApiError(400, 'Session ID cannot be empty', 'invalid_request_error', 'invalid_session_id', 'sessionId')
 			}
+			const cachedTools = getSessionTools(sessionId ?? getCurrentSessionId())
+			const submittedTools = body.tools === undefined ? undefined : validateTools(body.tools)
+			const tools = submittedTools ?? cachedTools ?? []
+			const toolsChanged = submittedTools !== undefined && JSON.stringify(submittedTools) !== JSON.stringify(cachedTools)
+			const prompt = withToolInstructions(buildCompletionPrompt(body.messages), tools, body.tool_choice, toolsChanged)
 
 			const resolved = resolveModel(body.model)
 			const thinkingEnabled = resolveThinkingEnabled(body, resolved.thinkingEnabled)
@@ -141,6 +144,7 @@ export async function startServer(options: ServerOptions = {}): Promise<void> {
 
 			if (clientDisconnected) return
 			setSessionHeader(result.sessionId)
+			if (submittedTools !== undefined) rememberSessionTools(result.sessionId, submittedTools)
 			if (result.stopped) {
 				if (stream) {
 					startStream()

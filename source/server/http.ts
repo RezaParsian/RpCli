@@ -17,11 +17,20 @@ export function getToken(req: Request): string {
 	)
 }
 
-export function cors(_req: Request, res: Response, next: NextFunction): void {
+export function cors(req: Request, res: Response, next: NextFunction): void {
+	const requestedHeaders = req.header('access-control-request-headers')
+
 	res.setHeader('Access-Control-Allow-Origin', '*')
 	res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-	res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, OpenAI-Beta')
+	res.setHeader(
+		'Access-Control-Allow-Headers',
+		requestedHeaders || 'Authorization, Content-Type, Accept, OpenAI-Beta, X-Requested-With'
+	)
 	res.setHeader('Access-Control-Expose-Headers', 'X-RP-Session-Id')
+	res.setHeader('Access-Control-Allow-Private-Network', 'true')
 	res.setHeader('Access-Control-Max-Age', '86400')
+	res.append('Vary', 'Origin')
+	res.append('Vary', 'Access-Control-Request-Headers')
+	res.append('Vary', 'Access-Control-Request-Private-Network')
 	next()
 }

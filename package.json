@@ -1,6 +1,6 @@
 {
 	"name": "@rezaparsian/rp-cli",
-	"version": "0.5.0",
+	"version": "0.5.1",
 	"description": "AI-powered coding CLI — interactive chat with local tools, plan/yolo modes, single prompts, and git commit messages",
 	"license": "MIT",
 	"author": {

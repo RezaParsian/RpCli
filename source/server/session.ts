@@ -2,9 +2,19 @@ import { type ChatStreamChunk } from '../../core-lib/index.js'
 import { getAIResponse } from '../actions/agent.js'
 import { chatSessionExists, getCurrentSessionId, resetChatSession, setCurrentSessionId } from '../core/apiClient.js'
 import { ServerSystemPrompt } from '../prompts/index.js'
+import { type FunctionTool } from './types.js'
 
 let completionQueue: Promise<void> = Promise.resolve()
 let initializedSessionToken: string | undefined
+const sessionTools = new Map<string, FunctionTool[]>()
+
+export function getSessionTools(sessionId: string | undefined): FunctionTool[] | undefined {
+	return sessionId ? sessionTools.get(sessionId) : undefined
+}
+
+export function rememberSessionTools(sessionId: string | undefined, tools: FunctionTool[]): void {
+	if (sessionId) sessionTools.set(sessionId, tools)
+}
 
 export function enqueueCompletion<T>(task: () => Promise<T>): Promise<T> {
 	const run = completionQueue.then(task, task)

@@ -87,7 +87,8 @@ produce different reasoning depths. When both fields are present, `thinking_enab
 
 Client-defined function tools are supported through the OpenAI `tools` and `tool_choice` fields. RP-CLI returns
 `finish_reason: "tool_calls"` and does not execute these functions. Execute the requested function in the client, then
-send its result as the final message with `role: "tool"` and the matching `tool_call_id`.
+send its result as the final message with `role: "tool"` and the matching `tool_call_id`. Tool definitions are cached
+per session, so clients may omit unchanged `tools` on later requests.
 
 ## Interactive chat
 
