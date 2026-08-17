@@ -19,7 +19,7 @@ export type ToolConfirmationDetails = {
 export type Tool = {
 	name: string
 	description: string
-	execute: (arguments_: Record<string, unknown>) => Promise<unknown>
+	execute: (arguments_: Record<string, unknown>, signal?: AbortSignal) => Promise<unknown>
 	requiresConfirmation?: boolean
 }
 

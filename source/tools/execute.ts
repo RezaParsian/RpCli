@@ -18,13 +18,13 @@ function formatToolOutput(value: unknown): string {
 	return JSON.stringify(value, null, 2)
 }
 
-export async function executeTool(call: ToolCall): Promise<ToolResult> {
+export async function executeTool(call: ToolCall, signal?: AbortSignal): Promise<ToolResult> {
 	const tool = tools.find((candidate) => candidate.name === call.name)
 
 	if (!tool) return { ok: false, tool_name: call.name, error: 'Unknown tool' }
 
 	try {
-		const result = await tool.execute(call.arguments)
+		const result = await tool.execute(call.arguments, signal)
 		return { ok: true, tool_name: call.name, result: formatToolOutput(result) }
 	} catch (error) {
 		return {
@@ -48,12 +48,15 @@ export async function executeTool(call: ToolCall): Promise<ToolResult> {
 export async function executeToolCalls(
 	calls: ToolCall[],
 	onConfirm: ConfirmationHandler,
-	mode: ToolMode
+	mode: ToolMode,
+	signal?: AbortSignal
 ): Promise<ToolResult[]> {
 	const results: ToolResult[] = []
 	let declined = false
 
 	for (const call of calls) {
+		if (signal?.aborted) break
+
 		if (declined) {
 			results.push({
 				ok: false,
@@ -67,8 +70,7 @@ export async function executeToolCalls(
 			results.push({
 				ok: false,
 				tool_name: call.name,
-				error:
-					'Plan mode is read-only. File changes and shell commands are blocked. Describe the plan instead. After you present a plan, wait for the user to approve it.',
+				error: 'Plan mode is read-only. File changes and shell commands are blocked. Describe the plan instead. After you present a plan, wait for the user to approve it.',
 			})
 			continue
 		}
@@ -97,7 +99,7 @@ export async function executeToolCalls(
 			}
 		}
 
-		results.push(await executeTool(call))
+		results.push(await executeTool(call, signal))
 	}
 
 	return results

@@ -49,7 +49,7 @@ export async function getAIResponse({
 	mode = 'normal',
 	toolsEnabled = true,
 }: AIResponseOptions): Promise<ChatResult> {
-	beginGeneration()
+	const signal = beginGeneration()
 
 	const send = (nextPrompt: string) =>
 		sendMessage({
@@ -99,7 +99,7 @@ export async function getAIResponse({
 		toolRounds += 1
 		onToolMessage?.(formatToolActivityMessage(response.content ?? '', toolCalls))
 
-		const results = await executeToolCalls(toolCalls, async (call) => (confirmTool ? confirmTool(call) : false), mode)
+		const results = await executeToolCalls(toolCalls, async (call) => (confirmTool ? confirmTool(call) : false), mode, signal)
 
 		if (isGenerationStopped()) return response
 

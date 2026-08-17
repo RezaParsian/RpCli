@@ -119,8 +119,7 @@ export const tools: Tool[] = [
 	},
 	{
 		name: 'delete_file',
-		description:
-			'delete_file(path: string) - Deletes one file inside the current working directory.',
+		description: 'delete_file(path: string) - Deletes one file inside the current working directory.',
 		requiresConfirmation: true,
 		async execute(arguments_) {
 			const filePath = await safePath(stringArgument(arguments_, 'path'))
@@ -176,7 +175,7 @@ export const tools: Tool[] = [
 		description:
 			'run_command(command: string) - Runs a shell command in the current working directory. Include sudo anywhere in the command when administrator privileges are needed; an OS authorization dialog will open.',
 		requiresConfirmation: true,
-		async execute(arguments_) {
+		async execute(arguments_, signal) {
 			const command = stringArgument(arguments_, 'command')
 			if (commandContainsSudo(command)) {
 				const elevatedCommand = stripSudo(command)
@@ -187,6 +186,7 @@ export const tools: Tool[] = [
 			const { stdout, stderr } = await exec(command, {
 				cwd: rootDirectory,
 				maxBuffer: 1024 * 1024,
+				signal,
 			})
 			return { stdout, stderr }
 		},
