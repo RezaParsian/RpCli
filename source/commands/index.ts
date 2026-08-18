@@ -7,6 +7,7 @@ export type SlashCommandContext = {
 	continueTask: () => void
 	clear: () => void
 	help: () => void
+	todos: () => void
 }
 
 export type SlashCommand = {
@@ -65,6 +66,13 @@ export const slashCommands: SlashCommand[] = [
 		description: 'Toggle saving chat transcripts to disk',
 		execute({ toggleLogging }) {
 			toggleLogging()
+		},
+	},
+	{
+		name: '/todos',
+		description: 'Show the current todo list',
+		execute({ todos }) {
+			todos()
 		},
 	},
 	{

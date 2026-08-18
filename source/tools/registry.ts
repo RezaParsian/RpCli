@@ -7,6 +7,7 @@ import listWorkspaceFiles from '../core/ListWorkspaceFiles.js'
 import { stringArgument, textArgument } from './arguments.js'
 import { rootDirectory, safePath, safeTargetPath } from './paths.js'
 import { commandContainsSudo, stripSudo } from './sudo.js'
+import { todoTools } from './todo.js'
 import type { Tool } from './types.js'
 
 type SudoPromptCallback = (error?: Error, stdout?: string | Buffer, stderr?: string | Buffer) => void
@@ -191,6 +192,7 @@ export const tools: Tool[] = [
 			return { stdout, stderr }
 		},
 	},
+	...todoTools,
 ]
 
 export function getToolDescriptions(): string[] {

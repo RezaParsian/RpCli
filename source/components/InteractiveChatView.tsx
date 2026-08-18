@@ -15,6 +15,7 @@ import {useChatSession} from './chat/useChatSession.js'
 import {useComposerKeys} from './chat/useComposerKeys.js'
 import {formatSlashCommandHelp, resolveSlashCommand, type SlashCommand} from '../commands/index.js'
 import {hideStreamingToolCalls} from '../tools/index.js'
+import {getTodoList} from '../tools/todo.js'
 import {ContinuePrompt, ExecutePlanPrompt, InitPrompt, PlanPrompt, readAgentsMarkdown} from '../prompts/index.js'
 import {isInvalidTokenError} from '../../core-lib/index.js'
 import listWorkspaceFiles from '../core/ListWorkspaceFiles.js'
@@ -238,6 +239,18 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 						setInput('')
 						return enabled
 					})
+				},
+
+				todos() {
+					setMessages((previous) => [
+						...previous,
+						{
+							id: `console-${Date.now()}-${Math.random()}`,
+							role: 'console',
+							content: getTodoList(),
+						},
+					])
+					setInput('')
 				},
 
 				exit: onExit,

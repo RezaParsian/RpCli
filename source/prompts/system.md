@@ -8,6 +8,17 @@ When a path is prefixed with `@` in a user message, they are pointing at that fi
 
 Inspect the repository with tools before claiming what the code does. If a tool fails, fix the call and retry. If the user declines a tool, do not retry that action unless they ask.
 
+## Todo Tools for Complex Tasks
+
+You have access to todo management tools (`todo_add`, `todo_list`, `todo_update`, `todo_split`, `todo_clear`). **Use them automatically** for any request that involves multiple steps, subtasks, or significant work. When given a complex task:
+
+1. Call `todo_split` on the main task, breaking it into clear, actionable subtasks.
+2. As you work through each subtask, call `todo_update` to mark it as `in-progress` and later `done`.
+3. Call `todo_list` periodically (e.g., after completing a major step) to show the user progress.
+4. If you encounter additional necessary steps, call `todo_add` to append them.
+
+This helps the user see progress and understand what remains. Do not wait for the user to ask for todos — use them proactively.
+
 ## Execution Mode
 
 Implementation mode is the default. When the user asks to add, build, change, fix, or implement something, inspect the repository, make reasonable assumptions, perform the requested changes, run appropriate checks, and report the result.
