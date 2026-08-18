@@ -24,6 +24,13 @@ export type { ServerOptions } from './types.js'
 
 dotenv.config({ path: tokenConfigPath, quiet: true })
 
+const deepSeekModel = Object.freeze({
+	id: 'deepseek',
+	object: 'model' as const,
+	created: 0,
+	owned_by: 'deepseek',
+})
+
 export async function startServer(options: ServerOptions = {}): Promise<void> {
 	const parsedPort = options.port ?? Number.parseInt(process.env['PORT'] || '3000', 10)
 	const port = Number.isInteger(parsedPort) && parsedPort >= 1 && parsedPort <= 65_535 ? parsedPort : 3000
@@ -39,6 +46,28 @@ export async function startServer(options: ServerOptions = {}): Promise<void> {
 
 	app.get('/health', (_req: Request, res: Response) => {
 		res.json({ status: 'ok', object: 'health', timestamp: new Date().toISOString() })
+	})
+
+	app.get('/v1/models', (_req: Request, res: Response) => {
+		res.json({ object: 'list', data: [deepSeekModel] })
+	})
+
+	app.get('/v1/models/:model', (req: Request, res: Response) => {
+		if (req.params['model'] !== deepSeekModel.id) {
+			sendError(
+				res,
+				new ApiError(
+					404,
+					'The model ' + req.params['model'] + ' does not exist',
+					'invalid_request_error',
+					'model_not_found',
+					'model'
+				)
+			)
+			return
+		}
+
+		res.json(deepSeekModel)
 	})
 
 	app.post(['/v1/chat/completions', '/v1/chat/completions/:sessionId'], async (req: Request, res: Response) => {
@@ -287,6 +316,7 @@ export async function startServer(options: ServerOptions = {}): Promise<void> {
 		server.listen(port, host, () => {
 			server.removeListener('error', reject)
 			console.log(`RP-CLI OpenAI-compatible API listening on http://${displayHost}:${port}/v1`)
+			console.log(`  GET  /v1/models`)
 			console.log(`  POST /v1/chat/completions`)
 			console.log(`  POST /v1/chat/completions/:sessionId`)
 			resolve()
