@@ -77,8 +77,13 @@ export function useChatSession({ token, onInvalidToken, setMessages }: Options) 
 	}, [deleteUnusedSession, onInvalidToken, setMessages, token])
 
 	const switchModel = useCallback(async (fromModel: 'default' | 'expert', toModel: 'default' | 'expert') => {
+		// The initialization request only loads the system prompt. Until the user
+		// sends a message, the same session can safely use either model. Keeping it
+		// also avoids racing a new session against deletion of the initializing one.
+		if (!hasUserMessage.current) return
+
 		let summary = ''
-		if (hasUserMessage.current && initializationSucceeded.current) {
+		if (initializationSucceeded.current) {
 			const response = await getAIResponse({
 				token,
 				prompt: "Summarize the conversation so far for another model. Preserve the user's goals, decisions, constraints, relevant files, and unfinished work. Return only a concise factual summary.",
@@ -99,7 +104,7 @@ export function useChatSession({ token, onInvalidToken, setMessages }: Options) 
 		startSession(toModel, initialPrompt)
 		await initialization.current
 
-	}, [onInvalidToken, startSession, token])
+	}, [startSession, token])
 
 	const resetConversation = useCallback((modelType: 'default' | 'expert' = 'default') => {
 		void deleteUnusedSession()

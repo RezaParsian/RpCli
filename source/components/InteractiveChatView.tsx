@@ -144,7 +144,7 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 				{
 					id: `console-${Date.now()}-${Math.random()}`,
 					role: 'console',
-					content: `Model switched to ${newModel}. Chat session reset.`,
+					content: `Model switched to ${newModel}.`,
 				},
 			])
 			setAwaitingModelConfirmation(false)
@@ -666,7 +666,7 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 								{
 									id: `console-${Date.now()}-${Math.random()}`,
 									role: 'console',
-									content: `Model switched to ${newModel}. Chat session reset.`,
+									content: `Model switched to ${newModel}.`,
 								},
 							])
 							setAwaitingModelConfirmation(false)
