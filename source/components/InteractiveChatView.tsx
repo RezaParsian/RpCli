@@ -323,6 +323,21 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 						return
 					}
 					const newModel = modelTypeRef.current === 'default' ? 'expert' : 'default'
+					if (!hasUserMessage.current) {
+						modelTypeRef.current = newModel
+						setModelType(newModel)
+						void saveModelPreference(newModel)
+						setMessages((previous) => [
+							...previous,
+							{
+								id: `console-${Date.now()}-${Math.random()}`,
+								role: 'console',
+								content: `Model switched to ${newModel}.`,
+							},
+						])
+						setInput('')
+						return
+					}
 					setPendingModel(newModel)
 					setAwaitingModelConfirmation(true)
 					setInput('')
@@ -331,7 +346,7 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 				exit: onExit,
 			})
 		},
-		[loading, onExit, resetConversation, awaitingModelConfirmation, modelLoaded]
+		[loading, onExit, resetConversation, awaitingModelConfirmation, modelLoaded, hasUserMessage]
 	)
 
 	const updateCommandQuery = useCallback((query: string) => {

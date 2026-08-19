@@ -21,7 +21,7 @@ export default function ModelConfirmation({ newModel, onConfirm, onCancel }: Pro
 			<Text color="yellow" bold>
 				⚠️ Switch to {newModel} model?
 			</Text>
-			<Text>This will start a new chat session. Current conversation will be lost.</Text>
+			<Text>This will carry the current conversation into a new chat session.</Text>
 			<Box marginTop={1}>
 				<Text>
 					Press <Text color="green">Enter</Text> to confirm or <Text color="red">Esc</Text> to cancel.
