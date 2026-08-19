@@ -84,6 +84,10 @@ export default async function chat({
 			headers: {
 				'x-ds-pow-response': challenge,
 				'content-type': 'application/json',
+				'x-client-version': '2.0.4',
+				'x-client-platform': 'android',
+				'x-client-locale': 'zh_CN',
+				'user-agent': 'DeepSeek/2.0.4 Android/35',
 				authorization: 'Bearer ' + token,
 			},
 			body: JSON.stringify({

@@ -30,18 +30,21 @@ export function useChatSession({ token, onInvalidToken, setMessages }: Options) 
 		await deleteSession(token, id).catch(() => undefined)
 	}, [token])
 
-	const startSession = useCallback(() => {
+	const startSession = useCallback((modelType: 'default' | 'expert' = 'default', prompt = getChatSystemPrompt()) => {
 		const generation = ++sessionGeneration.current
 		initializationSucceeded.current = false
 		initialization.current = (async () => {
 			try {
-				const response = await getAIResponse({ token, prompt: getChatSystemPrompt() })
+				const response = await getAIResponse({
+					token,
+					prompt,
+					modelType,
+				})
 
 				if (generation !== sessionGeneration.current) {
 					if (response.sessionId) {
 						void deleteSession(token, response.sessionId).catch(() => undefined)
 					}
-
 					return
 				}
 
@@ -73,13 +76,38 @@ export function useChatSession({ token, onInvalidToken, setMessages }: Options) 
 		})()
 	}, [deleteUnusedSession, onInvalidToken, setMessages, token])
 
-	const resetConversation = useCallback(() => {
+	const switchModel = useCallback(async (fromModel: 'default' | 'expert', toModel: 'default' | 'expert') => {
+		let summary = ''
+		if (hasUserMessage.current && initializationSucceeded.current) {
+			const response = await getAIResponse({
+				token,
+				prompt: "Summarize the conversation so far for another model. Preserve the user's goals, decisions, constraints, relevant files, and unfinished work. Return only a concise factual summary.",
+				modelType: fromModel,
+				thinkingEnabled: false,
+				toolsEnabled: false,
+			})
+			summary = response.content?.trim() ?? ''
+		}
+
+		sessionDeleted.current = false
+		hasUserMessage.current = false
+		sessionId.current = undefined
+		resetChatSession()
+		const initialPrompt = summary
+			? getChatSystemPrompt() + '\n\nConversation summary from the previous session:\n\n' + summary
+			: getChatSystemPrompt()
+		startSession(toModel, initialPrompt)
+		await initialization.current
+
+	}, [onInvalidToken, startSession, token])
+
+	const resetConversation = useCallback((modelType: 'default' | 'expert' = 'default') => {
 		void deleteUnusedSession()
 		sessionDeleted.current = false
 		hasUserMessage.current = false
 		sessionId.current = undefined
 		resetChatSession()
-		startSession()
+		startSession(modelType)
 	}, [deleteUnusedSession, startSession])
 
 	return {
@@ -90,6 +118,7 @@ export function useChatSession({ token, onInvalidToken, setMessages }: Options) 
 		stopRequested,
 		deleteUnusedSession,
 		startSession,
+		switchModel,
 		resetConversation,
 	}
 }

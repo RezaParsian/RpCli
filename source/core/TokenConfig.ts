@@ -7,6 +7,7 @@ export const tokenConfigDirectory = path.join(os.homedir(), '.config', 'rp-cli')
 export const tokenConfigPath = path.join(tokenConfigDirectory, '.env')
 
 export const chatLoggingEnvName = 'RP_CLI_LOG_CHAT'
+export const modelPreferenceEnvName = 'RP_CLI_MODEL'
 
 async function readConfigEntries(): Promise<Map<string, string>> {
 	const entries = new Map<string, string>()
@@ -77,4 +78,17 @@ export async function saveChatLoggingPreference(enabled: boolean): Promise<void>
 	}
 
 	await writeConfigEntries(entries)
+}
+
+export async function saveModelPreference(model: 'default' | 'expert'): Promise<void> {
+	const entries = await readConfigEntries()
+	entries.set(modelPreferenceEnvName, model)
+	await writeConfigEntries(entries)
+}
+
+export async function getModelPreference(): Promise<'default' | 'expert'> {
+	const entries = await readConfigEntries()
+	const value = entries.get(modelPreferenceEnvName)
+	if (value === 'expert') return 'expert'
+	return 'default'
 }

@@ -15,6 +15,7 @@ export type AIResponseOptions = {
 	searchEnabled?: boolean
 	mode?: ChatMode
 	toolsEnabled?: boolean
+	modelType?: 'default' | 'expert'
 }
 
 export function getChatSystemPrompt(): string {
@@ -59,6 +60,7 @@ export async function getAIResponse({
 	searchEnabled = false,
 	mode = 'normal',
 	toolsEnabled = true,
+	modelType = 'default',
 }: AIResponseOptions): Promise<ChatResult> {
 	const signal = beginGeneration()
 
@@ -68,6 +70,7 @@ export async function getAIResponse({
 			prompt: nextPrompt,
 			thinkingEnabled,
 			searchEnabled,
+			modelType,
 			onChunk,
 		})
 

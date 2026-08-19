@@ -25,6 +25,7 @@ export type SendMessageOptions = {
 	prompt: string
 	thinkingEnabled?: boolean
 	searchEnabled?: boolean
+	modelType?: 'default' | 'expert'
 	onChunk?: (chunk: ChatStreamChunk) => void
 	emptyResponseRetryCount?: number
 }
@@ -77,6 +78,7 @@ export default async function sendMessage({
 	prompt,
 	thinkingEnabled = true,
 	searchEnabled = false,
+	modelType = 'default',
 	onChunk,
 	emptyResponseRetryCount = 0,
 }: SendMessageOptions): Promise<ChatResult> {
@@ -132,6 +134,7 @@ export default async function sendMessage({
 		sessionId,
 		parentMessageId,
 		prompt,
+		model_type: modelType,
 		thinking_enabled: thinkingEnabled,
 		search_enabled: searchEnabled,
 		signal: generationAbort?.signal,

@@ -9,6 +9,7 @@ import ChatStatusBar from './chat/ChatStatusBar.js'
 import {createLiveStream} from './chat/createLiveStream.js'
 import {MessageRow} from './chat/MessageRow.js'
 import PlanConfirmation from './chat/PlanConfirmation.js'
+import ModelConfirmation from './chat/ModelConfirmation.js'
 import type {ChatMessage, SubmitOptions} from './chat/types.js'
 import {loadingSpinnerText} from './chat/types.js'
 import {useChatSession} from './chat/useChatSession.js'
@@ -21,8 +22,9 @@ import {isInvalidTokenError} from '../../core-lib/index.js'
 import listWorkspaceFiles from '../core/ListWorkspaceFiles.js'
 import {endPosition, mentionQuery, slashCommandQuery} from '../core/textCursor.js'
 import {type ChatMode, getAIResponse} from '../actions/agent.js'
-import sendMessage, {stopCurrentGeneration} from '../core/apiClient.js'
+import sendMessage, {resetChatSession, stopCurrentGeneration} from '../core/apiClient.js'
 import {chatLogDirectory, isChatLoggingEnabled, setChatLoggingEnabled} from '../core/LogChat.js'
+import {getModelPreference, saveModelPreference} from '../core/TokenConfig.js'
 
 type Props = {
 	version?: string
@@ -47,12 +49,17 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 	const [loading, setLoading] = useState(false)
 	const [thinkingEnabled, setThinkingEnabled] = useState(true)
 	const [searchEnabled, setSearchEnabled] = useState(false)
+	const [modelType, setModelType] = useState<'default' | 'expert'>('default')
+	const [modelLoaded, setModelLoaded] = useState(false)
+	const modelTypeRef = useRef<'default' | 'expert'>('default')
 	// Logging state is handled by the config file; no local state needed.
 	const [mentionEntries, setMentionEntries] = useState<string[]>([])
 	const [filePickerOpen, setFilePickerOpen] = useState(false)
 	const [commandPickerOpen, setCommandPickerOpen] = useState(false)
 	const [mode, setMode] = useState<ChatMode>('normal')
 	const [awaitingPlanStart, setAwaitingPlanStart] = useState(false)
+	const [awaitingModelConfirmation, setAwaitingModelConfirmation] = useState(false)
+	const [pendingModel, setPendingModel] = useState<'default' | 'expert'>('default')
 	const modeBeforePlan = useRef<ChatMode>('normal')
 
 	const {
@@ -64,6 +71,7 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 		deleteUnusedSession,
 		startSession,
 		resetConversation,
+		switchModel,
 	} = useChatSession({ token, onInvalidToken, setMessages })
 
 	const { pending, confirmTool } = useToolConfirmation()
@@ -86,6 +94,24 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 		}
 	}, [stdin])
 
+	useEffect(() => {
+		const init = async () => {
+			const saved = await getModelPreference()
+			modelTypeRef.current = saved
+			setModelType(saved)
+			setModelLoaded(true)
+			resetChatSession()
+			if (!unmounted.current) {
+				startSession(saved)
+			}
+		}
+		init()
+		return () => {
+			unmounted.current = true
+			void deleteUnusedSession()
+		}
+	}, [startSession, deleteUnusedSession, unmounted])
+
 	const fileQuery = mentionQuery(input) ?? ''
 	const commandQuery = slashCommandQuery(input) ?? ''
 
@@ -95,6 +121,34 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 			if (initializationSucceeded.current) {
 				void stopCurrentGeneration(token)
 			}
+			return
+		}
+
+		if (key.escape && awaitingModelConfirmation) {
+			setAwaitingModelConfirmation(false)
+			setInput('')
+			return
+		}
+
+		if (key.return && awaitingModelConfirmation) {
+			// Confirm model switch
+			const newModel = pendingModel
+			const previousModel = modelTypeRef.current
+			modelTypeRef.current = newModel
+			setModelType(newModel)
+			void saveModelPreference(newModel)
+			setLoading(true)
+			void switchModel(previousModel, newModel).finally(() => setLoading(false))
+			setMessages((previous) => [
+				...previous,
+				{
+					id: `console-${Date.now()}-${Math.random()}`,
+					role: 'console',
+					content: `Model switched to ${newModel}. Chat session reset.`,
+				},
+			])
+			setAwaitingModelConfirmation(false)
+			setInput('')
 			return
 		}
 
@@ -128,7 +182,7 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 		setCommandPickerOpen,
 		setMode,
 		rawBackspaceModifiers,
-		isActive: !filePickerOpen && !commandPickerOpen && !loading && !pending && !awaitingPlanStart,
+		isActive: !filePickerOpen && !commandPickerOpen && !loading && !pending && !awaitingPlanStart && !awaitingModelConfirmation && modelLoaded,
 	})
 
 	const handleInputChange = useCallback((value: string) => {
@@ -139,6 +193,18 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 
 	const runCommand = useCallback(
 		(command: SlashCommand) => {
+			if (!modelLoaded) {
+				setMessages((previous) => [
+					...previous,
+					{
+						id: `console-${Date.now()}-${Math.random()}`,
+						role: 'console',
+						content: 'Please wait for model preference to load.',
+					},
+				])
+				return
+			}
+
 			setCommandPickerOpen(false)
 
 			command.execute({
@@ -163,7 +229,7 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 				clear() {
 					if (loading) return
 
-					resetConversation()
+					resetConversation(modelTypeRef.current)
 					setInput('')
 					setCursorPosition([0, 0])
 					setStreamingMessages([])
@@ -250,10 +316,22 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 					setInput('')
 				},
 
+				toggleModel() {
+					if (awaitingModelConfirmation) {
+						setAwaitingModelConfirmation(false)
+						setInput('')
+						return
+					}
+					const newModel = modelTypeRef.current === 'default' ? 'expert' : 'default'
+					setPendingModel(newModel)
+					setAwaitingModelConfirmation(true)
+					setInput('')
+				},
+
 				exit: onExit,
 			})
 		},
-		[loading, onExit, resetConversation]
+		[loading, onExit, resetConversation, awaitingModelConfirmation, modelLoaded]
 	)
 
 	const updateCommandQuery = useCallback((query: string) => {
@@ -294,16 +372,6 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 	}, [filePickerOpen, refreshMentionEntries])
 
 	useEffect(() => {
-		unmounted.current = false
-		startSession()
-
-		return () => {
-			unmounted.current = true
-			void deleteUnusedSession()
-		}
-	}, [deleteUnusedSession, startSession])
-
-	useEffect(() => {
 		onRegisterBeforeExit?.(deleteUnusedSession)
 		return () => onRegisterBeforeExit?.(undefined)
 	}, [deleteUnusedSession, onRegisterBeforeExit])
@@ -318,7 +386,23 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 				return
 			}
 
+			if (!modelLoaded) {
+				setMessages((previous) => [
+					...previous,
+					{
+						id: `console-${Date.now()}-${Math.random()}`,
+						role: 'console',
+						content: 'Please wait for model preference to load.',
+					},
+				])
+				return
+			}
+
 			if (awaitingPlanStart && !options.executeApprovedPlan) {
+				return
+			}
+
+			if (awaitingModelConfirmation) {
 				return
 			}
 
@@ -405,6 +489,7 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 						},
 						searchEnabled,
 						mode: effectiveMode,
+						modelType: modelTypeRef.current,
 					})
 
 					stream.dispose()
@@ -436,6 +521,7 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 									prompt: `AGENTS.md is now the project-specific ground truth for this session. Follow it unless the user asks otherwise.\n\n${agents}`,
 									thinkingEnabled,
 									searchEnabled,
+									modelType: modelTypeRef.current,
 								})
 
 								if (!unmounted.current) {
@@ -510,6 +596,8 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 			token,
 			unmounted,
 			awaitingPlanStart,
+			awaitingModelConfirmation,
+			modelLoaded,
 		]
 	)
 
@@ -562,12 +650,44 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 					<Spinner text={loadingSpinnerText(streamingMessages)} />
 				) : awaitingPlanStart ? (
 					<PlanConfirmation onDecide={handlePlanDecision} />
+				) : awaitingModelConfirmation ? (
+					<ModelConfirmation
+						newModel={pendingModel}
+						onConfirm={() => {
+							const newModel = pendingModel
+							const previousModel = modelTypeRef.current
+							modelTypeRef.current = newModel
+							setModelType(newModel)
+							void saveModelPreference(newModel)
+							setLoading(true)
+							void switchModel(previousModel, newModel).finally(() => setLoading(false))
+							setMessages((previous) => [
+								...previous,
+								{
+									id: `console-${Date.now()}-${Math.random()}`,
+									role: 'console',
+									content: `Model switched to ${newModel}. Chat session reset.`,
+								},
+							])
+							setAwaitingModelConfirmation(false)
+							setInput('')
+						}}
+						onCancel={() => {
+							setAwaitingModelConfirmation(false)
+							setInput('')
+						}}
+					/>
+				) : !modelLoaded ? (
+					<Box flexDirection="column" marginY={1}>
+						<Text dimColor>Loading model preference…</Text>
+					</Box>
 				) : (
 					<Box flexDirection="column">
 						<ChatStatusBar
 							mode={mode}
 							searchEnabled={searchEnabled}
 							thinkingEnabled={thinkingEnabled}
+							modelType={modelType}
 						/>
 
 						<Box

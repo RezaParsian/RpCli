@@ -8,6 +8,7 @@ export type SlashCommandContext = {
 	clear: () => void
 	help: () => void
 	todos: () => void
+	toggleModel: () => void
 }
 
 export type SlashCommand = {
@@ -73,6 +74,13 @@ export const slashCommands: SlashCommand[] = [
 		description: 'Show the current todo list',
 		execute({ todos }) {
 			todos()
+		},
+	},
+	{
+		name: '/model',
+		description: 'Toggle between default and expert model',
+		execute({ toggleModel }) {
+			toggleModel()
 		},
 	},
 	{

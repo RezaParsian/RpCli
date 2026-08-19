@@ -8,6 +8,7 @@ AI-powered coding CLI (`rc`) — interactive chat with local tools, plan/yolo mo
 - 🔧 **Built-in tools** – file read/write/edit, shell commands, search, todos
 - 📋 **Todo management** – track progress with `todo_add`, `todo_split`, `todo_update`, `todo_list`, `todo_clear` *(see note under Interactive Chat)*
 - 🧠 **Plan mode** – read-only exploration before implementing changes
+- 🔄 **Model switching** – switch between default and Expert models while carrying conversation context into a fresh session
 - ⚡ **YOLO mode** – execute tools without confirmation
 - 📝 **Commit message generation** – generate conventional commit messages from staged or all changes
 - 🌐 **HTTP server** – serve an OpenAI-compatible API with `rc serve`
@@ -122,6 +123,7 @@ Press **TAB** to cycle `normal` → `yolo` → `plan`. The status bar shows the 
 | `/clear`            | Start a new conversation (clears todos too).             |
 | `/help`             | List commands.                                           |
 | `/search`           | Toggle web search.                                       |
+| `/model`            | Switch between the default and Expert models. The current conversation is summarized and carried into the new session. |
 | `/thinking`         | Toggle thinking (on by default in chat).                 |
 | `/logging` (`/log`) | Toggle saving transcripts under `~/.config/rp-cli/logs`. |
 | `/todos`            | Show current todo list.                                  |
@@ -200,7 +202,9 @@ Write literal `<` and `>` inside parameter values. Do not convert them to `&lt;`
 
 The CLI stores configuration in `~/.config/rp-cli/`:
 
-- `.env` – API keys and preferences (including logging toggle)
+- `.env` – API keys and preferences (including logging and model selection)
+
+The selected model is stored as `RP_CLI_MODEL=default` or `RP_CLI_MODEL=expert`.
 - `logs/` – chat transcripts (if logging is enabled)
 
 ## Development
