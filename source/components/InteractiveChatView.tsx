@@ -47,7 +47,7 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 	const [loading, setLoading] = useState(false)
 	const [thinkingEnabled, setThinkingEnabled] = useState(true)
 	const [searchEnabled, setSearchEnabled] = useState(false)
-	const [loggingEnabled, setLoggingEnabled] = useState(() => isChatLoggingEnabled())
+	// Logging state is handled by the config file; no local state needed.
 	const [mentionEntries, setMentionEntries] = useState<string[]>([])
 	const [filePickerOpen, setFilePickerOpen] = useState(false)
 	const [commandPickerOpen, setCommandPickerOpen] = useState(false)
@@ -223,22 +223,19 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 				},
 
 				toggleLogging() {
-					setLoggingEnabled((current) => {
-						const enabled = !current
-						void setChatLoggingEnabled(enabled)
-						setMessages((previous) => [
-							...previous,
-							{
-								id: `console-${Date.now()}-${Math.random()}`,
-								role: 'console',
-								content: enabled
-									? `Logging enabled. Transcripts are saved in ${chatLogDirectory}.`
-									: 'Logging disabled.',
-							},
-						])
-						setInput('')
-						return enabled
-					})
+					const enabled = !isChatLoggingEnabled()
+					void setChatLoggingEnabled(enabled)
+					setMessages((previous) => [
+						...previous,
+						{
+							id: `console-${Date.now()}-${Math.random()}`,
+							role: 'console',
+							content: enabled
+								? `Logging enabled. Transcripts are saved in ${chatLogDirectory}.`
+								: 'Logging disabled.',
+						},
+					])
+					setInput('')
 				},
 
 				todos() {
@@ -571,7 +568,6 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 							mode={mode}
 							searchEnabled={searchEnabled}
 							thinkingEnabled={thinkingEnabled}
-							loggingEnabled={loggingEnabled}
 						/>
 
 						<Box

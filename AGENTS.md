@@ -73,6 +73,16 @@ This file provides operational guidance for AI coding agents working on this rep
 - Use Conventional Commits (enforced by `rc -c` which generates a message and asks for confirmation).
 - Prefer concise, imperative commit titles.
 
+## AI Agent Workflow
+
+When performing edits or implementing changes, **always verify the code** immediately after making modifications:
+- Run `pnpm build` (or at least `pnpm tsc --noEmit`) to catch TypeScript errors.
+- If you've added or changed tests, run `pnpm test` to ensure they pass.
+- If you've changed formatting, run `pnpm format` to keep code style consistent.
+- Commit only after the build and tests pass.
+
+This ensures that changes do not introduce regressions or type errors.
+
 ## Common Pitfalls
 
 - **Build fails** – Ensure `pnpm install` is run; `node scripts/copy-prompts.mjs` requires `source/prompts/` to exist.

@@ -6,10 +6,9 @@ type Props = {
 	mode: ChatMode
 	searchEnabled: boolean
 	thinkingEnabled: boolean
-	loggingEnabled: boolean
 }
 
-export default function ChatStatusBar({ mode, searchEnabled, thinkingEnabled, loggingEnabled }: Props) {
+export default function ChatStatusBar({ mode, searchEnabled, thinkingEnabled }: Props) {
 	return (
 		<Box justifyContent="space-between" paddingX={1}>
 			<Text dimColor>Ready</Text>
@@ -37,13 +36,7 @@ export default function ChatStatusBar({ mode, searchEnabled, thinkingEnabled, lo
 					<Text dimColor>(/thinking)</Text>
 				</Text>
 
-				<Text>
-					Log:{' '}
-					<Text color={loggingEnabled ? 'green' : 'red'} bold>
-						{loggingEnabled ? 'ON' : 'OFF'}
-					</Text>{' '}
-					<Text dimColor>(/logging)</Text>
-				</Text>
+
 			</Box>
 		</Box>
 	)
