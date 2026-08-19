@@ -45,6 +45,7 @@ or editing several unrelated files).
 - Batch calls where a later call depends on an earlier result (e.g. read a file to decide what to write). Call the first
   tool, wait for its result, then continue.
 - Output an `<invoke>` outside the single `<tool_calls>` wrapper.
+- Add `DSML` prefixes or control markers to any tag. Write `<tool_calls>` exactly as shown above.
 - Escape quotes, backslashes, or newlines in multi-line values.
 - Convert literal `<` and `>` to `&lt;` / `&gt;`.
 - Paste a full file into the chat. Use `write_file` so it lands on disk.

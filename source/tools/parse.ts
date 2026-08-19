@@ -1,6 +1,6 @@
 import type { ToolCall } from './types.js'
 
-function normalizeParamValue(value: string): string {
+	return content.replace(/<([/]?)｜+DSML｜+(?=tool_calls|invoke|parameter)/g, '<$1')
 	const openingNewline = /^(\r?\n)/.exec(value)?.[1]
 	if (!openingNewline) return value
 
@@ -98,7 +98,7 @@ export function parseToolCalls(content: string): ToolCall[] {
 
 /** Hides complete and partially streamed tool-call markup from user-facing text. */
 export function hideStreamingToolCalls(content: string): string {
-	const marker = '<tool_calls'
+	const markers = ['<tool_calls', '<｜DSML｜tool_calls', '<｜｜DSML｜｜tool_calls']
 	let visible = content.replace(/<tool_calls>[\s\S]*?<\/tool_calls>/g, '')
 	const incompleteCall = visible.indexOf(marker)
 	if (incompleteCall !== -1) visible = visible.slice(0, incompleteCall)
