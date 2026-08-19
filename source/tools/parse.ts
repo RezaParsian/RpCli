@@ -25,13 +25,21 @@ function normalizeParamValue(value: string): string {
 
 function parseParams(body: string): Record<string, unknown> {
 	const arguments_: Record<string, unknown> = {}
-	const paramPattern = /<parameter\s+name="([^"]+)">([\s\S]*?)<\/parameter>/g
+	const paramPattern = /<parameter\b([^>]*)>([\s\S]*?)<\/parameter>/g
 	let paramMatch: RegExpExecArray | null
 
 	while ((paramMatch = paramPattern.exec(body)) !== null) {
-		const [, paramName, rawValue] = paramMatch
-		if (!paramName) continue
+		const [, attributes, rawValue] = paramMatch
+		const paramName = /(?:^|\s)name="([^"]+)"/.exec(attributes ?? '')?.[1]
+		if (!paramName) {
+			throw new TypeError('Invalid tool parameter. Expected a name="..." attribute.')
+		}
+
 		arguments_[paramName] = normalizeParamValue(rawValue ?? '')
+	}
+
+	if (body.replace(paramPattern, '').includes('<parameter')) {
+		throw new TypeError('Invalid tool parameter. Expected a complete <parameter name="...">value</parameter> tag.')
 	}
 
 	return arguments_
@@ -75,6 +83,14 @@ export function parseToolCalls(content: string): ToolCall[] {
 
 			calls.push({ name, arguments: arguments_ })
 		}
+
+		if (wrapperBody.replace(callPattern, '').includes('<invoke')) {
+			throw new TypeError('Invalid tool call. Expected a complete <invoke name="...">...</invoke> block.')
+		}
+	}
+
+	if (content.replace(wrapperPattern, '').includes('<tool_calls')) {
+		throw new TypeError('Invalid tool calls block. Expected a closing </tool_calls> tag.')
 	}
 
 	return calls
