@@ -1,8 +1,8 @@
 import React from 'react'
-import { Box, Text } from 'ink'
+import {Box, Text} from 'ink'
 import MarkdownText from '../MarkdownText.js'
 import RpCliLogo from '../RpCliLogo.js'
-import type { ChatMessage } from './types.js'
+import type {ChatMessage} from './types.js'
 
 export const MessageRow = React.memo(function MessageRow({
 	msg,
@@ -48,7 +48,7 @@ export const MessageRow = React.memo(function MessageRow({
 
 			{msg.role === 'console' && (
 				<Box>
-					<MarkdownText text={msg.content} />
+					<MarkdownText dim text={msg.content} />
 				</Box>
 			)}
 		</Box>

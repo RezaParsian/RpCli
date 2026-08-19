@@ -83,27 +83,27 @@ function syntaxLanguage(language?: string): string | undefined {
 	return supportedLanguages.has(resolved) ? resolved : 'plaintext'
 }
 
-function renderInline(tokens: AnyToken[]): React.ReactNode {
+function renderInline(tokens: AnyToken[], dim = false): React.ReactNode {
 	return tokens.map((token, i) => {
 		if (token.type === 'strong') {
 			return (
-				<Text key={i} bold>
-					{token.tokens ? renderInline(token.tokens) : token.text}
+				<Text key={i} bold dimColor={dim}>
+					{token.tokens ? renderInline(token.tokens, dim) : token.text}
 				</Text>
 			)
 		}
 
 		if (token.type === 'em') {
 			return (
-				<Text key={i} italic>
-					{token.tokens ? renderInline(token.tokens) : token.text}
+				<Text key={i} italic dimColor={dim}>
+					{token.tokens ? renderInline(token.tokens, dim) : token.text}
 				</Text>
 			)
 		}
 
 		if (token.type === 'codespan') {
 			return (
-				<Text key={i} color="yellow">
+				<Text key={i} color="yellow" dimColor={dim}>
 					{token.text}
 				</Text>
 			)
@@ -111,18 +111,18 @@ function renderInline(tokens: AnyToken[]): React.ReactNode {
 
 		if (token.type === 'link') {
 			return (
-				<Text key={i}>
-					<Text color="cyan">{token.text}</Text>
-					<Text color="gray"> ({token.href})</Text>
+				<Text key={i} dimColor={dim}>
+					<Text color="cyan" dimColor={dim}>{token.text}</Text>
+					<Text color="gray" dimColor={dim}> ({token.href})</Text>
 				</Text>
 			)
 		}
 
 		if (token.type === 'text' && token.tokens?.length) {
-			return <React.Fragment key={i}>{renderInline(token.tokens)}</React.Fragment>
+			return <React.Fragment key={i}>{renderInline(token.tokens, dim)}</React.Fragment>
 		}
 
-		return <Text key={i}>{token.text ?? token.raw ?? ''}</Text>
+		return <Text key={i} dimColor={dim}>{token.text ?? token.raw ?? ''}</Text>
 	})
 }
 
@@ -140,7 +140,7 @@ function inlineText(tokens?: AnyToken[]): string {
 		.join('')
 }
 
-function renderBlock(token: AnyToken, key: number, isThinking = false): React.ReactNode {
+function renderBlock(token: AnyToken, key: number, isThinking = false, dim = false): React.ReactNode {
 	if (token.type === 'heading') {
 		const colorMap: Record<number, string> = {
 			1: 'magenta',
@@ -150,8 +150,8 @@ function renderBlock(token: AnyToken, key: number, isThinking = false): React.Re
 
 		return (
 			<Box key={key} marginTop={key > 0 ? 1 : 0}>
-				<Text bold color={isThinking ? undefined : colorMap[token.depth ?? 1] ?? 'white'}>
-					{token.tokens ? renderInline(token.tokens) : token.text}
+				<Text bold color={isThinking ? undefined : colorMap[token.depth ?? 1] ?? 'white'} dimColor={dim}>
+					{token.tokens ? renderInline(token.tokens, dim) : token.text}
 				</Text>
 			</Box>
 		)
@@ -160,7 +160,9 @@ function renderBlock(token: AnyToken, key: number, isThinking = false): React.Re
 	if (token.type === 'paragraph') {
 		return (
 			<Box key={key} marginBottom={1}>
-				<Text wrap="wrap">{token.tokens ? renderInline(token.tokens) : token.text}</Text>
+				<Text wrap="wrap" dimColor={dim}>
+					{token.tokens ? renderInline(token.tokens, dim) : token.text}
+				</Text>
 			</Box>
 		)
 	}
@@ -180,9 +182,9 @@ function renderBlock(token: AnyToken, key: number, isThinking = false): React.Re
 					const inlineTokens = (item.tokens?.[0] as AnyToken | undefined)?.tokens ?? []
 
 					return (
-						<Text key={i}>
+						<Text key={i} dimColor={dim}>
 							{'  • '}
-							{inlineTokens.length ? renderInline(inlineTokens) : item.text}
+							{inlineTokens.length ? renderInline(inlineTokens, dim) : item.text}
 						</Text>
 					)
 				})}
@@ -206,26 +208,26 @@ function renderBlock(token: AnyToken, key: number, isThinking = false): React.Re
 
 		return (
 			<Box key={key} flexDirection="column" marginBottom={1}>
-				<Text>{border('┌', '┬', '┐')}</Text>
+				<Text dimColor={dim}>{border('┌', '┬', '┐')}</Text>
 
-				<Text bold color={isThinking ? undefined : 'cyan'}>
+				<Text bold color={isThinking ? undefined : 'cyan'} dimColor={dim}>
 					{formatRow(headers)}
 				</Text>
 
-				<Text>{border('├', '┼', '┤')}</Text>
+				<Text dimColor={dim}>{border('├', '┼', '┤')}</Text>
 
 				{rows.map((row, i) => (
-					<Text key={i}>{formatRow(row)}</Text>
+					<Text key={i} dimColor={dim}>{formatRow(row)}</Text>
 				))}
 
-				<Text>{border('└', '┴', '┘')}</Text>
+				<Text dimColor={dim}>{border('└', '┴', '┘')}</Text>
 			</Box>
 		)
 	}
 
 	if (token.type === 'hr') {
 		return (
-			<Text key={key} color={isThinking ? undefined : 'gray'}>
+			<Text key={key} color={isThinking ? undefined : 'gray'} dimColor={dim}>
 				{'─'.repeat(60)}
 			</Text>
 		)
@@ -235,12 +237,12 @@ function renderBlock(token: AnyToken, key: number, isThinking = false): React.Re
 		return <Box key={key} marginBottom={1} />
 	}
 
-	return <Text key={key}>{token.raw ?? ''}</Text>
+	return <Text key={key} dimColor={dim}>{token.raw ?? ''}</Text>
 }
 
-type markdownTextProps = { text: string; isThinking?: boolean }
-export default function MarkdownText({ text, isThinking = false }: markdownTextProps) {
+type markdownTextProps = { text: string; isThinking?: boolean; dim?: boolean }
+export default function MarkdownText({ text, isThinking = false, dim = false }: markdownTextProps) {
 	const tokens = marked.lexer(text) as unknown as AnyToken[]
 
-	return <Box flexDirection="column">{tokens.map((token, i) => renderBlock(token, i, isThinking))}</Box>
+	return <Box flexDirection="column">{tokens.map((token, i) => renderBlock(token, i, isThinking, dim))}</Box>
 }

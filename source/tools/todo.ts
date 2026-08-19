@@ -32,28 +32,25 @@ function updateParentStatus(parentId: number): void {
 	}
 }
 
-function formatTodo(todo: Todo, indent: number = 0): string {
-	const prefix = '  '.repeat(indent)
-	const statusIcon = todo.status === 'done' ? '✅' : todo.status === 'in-progress' ? '🔄' : '⏳'
-	const subtaskCount = todo.subtaskIds.length > 0 ? ` (${todo.subtaskIds.length} subtasks)` : ''
-	return `${prefix}${statusIcon} [#${todo.id}] ${todo.description}${subtaskCount}`
-}
-
 function formatTodoList(): string {
 	const rootTodos = Array.from(todos.values()).filter((t) => t.parentId === null)
-	if (rootTodos.length === 0) return 'No todos yet.'
+	if (rootTodos.length === 0) return '📋 **Todo List** – No todos yet.'
 
 	const done = Array.from(todos.values()).filter((t) => t.status === 'done').length
 	const total = todos.size
 	const progress = total > 0 ? Math.round((done / total) * 100) : 0
 
+	const statusIcon = (status: Status) => status === 'done' ? '✅' : status === 'in-progress' ? '🔄' : '⏳'
+
 	let output = `📋 **Todo List** (${done}/${total} done, ${progress}% complete)\n\n`
 
 	for (const todo of rootTodos) {
-		output += formatTodo(todo) + '\n'
+		const icon = statusIcon(todo.status)
+		output += `${icon} [#${todo.id}] ${todo.description}\n`
 		for (const subId of todo.subtaskIds) {
 			const sub = getTodo(subId)
-			output += formatTodo(sub, 1) + '\n'
+			const subIcon = statusIcon(sub.status)
+			output += `  ↳ ${subIcon} [#${sub.id}] ${sub.description}\n`
 		}
 	}
 
@@ -61,7 +58,7 @@ function formatTodoList(): string {
 }
 
 function formatTodoListWithMessage(message: string): string {
-	return `${message}\n\n${formatTodoList()}`
+	return `📌 **${message}**\n\n${formatTodoList()}`
 }
 
 export function getTodoList(): string {
@@ -80,8 +77,12 @@ export const todoTools = [
 				throw new Error('description is required and must be a string')
 			}
 
-			const parentId = arguments_['parent_id'] as number | undefined
-			if (parentId !== undefined) {
+			let parentId: number | undefined
+			if (arguments_['parent_id'] !== undefined) {
+				parentId = Number(arguments_['parent_id'])
+				if (isNaN(parentId)) {
+					throw new Error('parent_id must be a number')
+				}
 				const parent = getTodo(parentId)
 				if (parent.status === 'done') {
 					throw new Error('Cannot add subtask to a completed todo')
@@ -123,10 +124,10 @@ export const todoTools = [
 			'todo_update(id: number, status: "pending" | "in-progress" | "done") - Updates the status of a todo. If a parent becomes done and all subtasks are done, it auto-updates.',
 		requiresConfirmation: false,
 		async execute(arguments_: Record<string, unknown>, _signal?: AbortSignal) {
-			const id = arguments_['id'] as number
+			const id = Number(arguments_['id'])
 			const status = arguments_['status'] as Status
 
-			if (!id || typeof id !== 'number') throw new Error('id must be a number')
+			if (isNaN(id)) throw new Error('id must be a number')
 			if (!status || !['pending', 'in-progress', 'done'].includes(status)) {
 				throw new Error('status must be one of: pending, in-progress, done')
 			}
@@ -158,12 +159,37 @@ export const todoTools = [
 			'todo_split(id: number, subtasks: string[]) - Replaces a todo with a list of subtasks. The original todo becomes a parent and its status resets to pending. Returns the subtask ids.',
 		requiresConfirmation: false,
 		async execute(arguments_: Record<string, unknown>, _signal?: AbortSignal) {
-			const id = arguments_['id'] as number
-			const subtaskDescriptions = arguments_['subtasks'] as string[]
+			const id = Number(arguments_['id'])
+			let subtaskDescriptions = arguments_['subtasks']
 
-			if (!id || typeof id !== 'number') throw new Error('id must be a number')
-			if (!Array.isArray(subtaskDescriptions) || subtaskDescriptions.length === 0) {
-				throw new Error('subtasks must be a non-empty array of strings')
+			if (isNaN(id)) throw new Error('id must be a number')
+
+			// Coerce subtasks into an array of strings
+			let subtaskArray: string[] = []
+			if (typeof subtaskDescriptions === 'string') {
+				// Split by newline only (not comma) to avoid character-level splitting
+				subtaskArray = subtaskDescriptions.split('\n').map(s => s.trim()).filter(Boolean)
+				// If no newlines found but there are commas, treat as a single subtask
+				if (subtaskArray.length === 1 && subtaskArray[0]!.includes(',')) {
+					// Check if it's a list like "item1, item2, item3" without newlines
+					const commaSplit = subtaskArray[0]!.split(',').map(s => s.trim()).filter(Boolean)
+					if (commaSplit.length > 1) {
+						subtaskArray = commaSplit
+					}
+				}
+			} else if (Array.isArray(subtaskDescriptions)) {
+				subtaskArray = subtaskDescriptions.map(s => String(s).trim()).filter(Boolean)
+			} else {
+				throw new Error('subtasks must be a string with newlines, or an array of strings')
+			}
+
+			// Validate: if a single subtask is longer than 200 chars, warn the model
+			if (subtaskArray.length === 1 && subtaskArray[0]!.length > 200) {
+				throw new Error('Subtasks should be a list of individual tasks (one per line or array item). Single long description detected.')
+			}
+
+			if (subtaskArray.length === 0) {
+				throw new Error('subtasks must contain at least one non-empty item')
 			}
 
 			const todo = getTodo(id)

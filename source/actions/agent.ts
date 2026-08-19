@@ -32,6 +32,17 @@ function formatResultsMessage(results: ToolResult[]): string {
 	return `${blocks}\nUse these results to continue answering the user's request.`
 }
 
+function formatToolResultsForDisplay(results: ToolResult[]): string {
+	const lines = results.map((result) => {
+		if (!result.ok) {
+			return `❌ ${result.tool_name}: ${result.error}`
+		}
+		const output = result.result?.trim() || '(no output)'
+		return `⚙️ ${result.tool_name}:\n${output}`
+	})
+	return lines.join('\n\n')
+}
+
 const MAX_TOOL_ROUNDS = 10
 
 function toolRoundLimitMessage(): string {
@@ -102,6 +113,12 @@ export async function getAIResponse({
 		const results = await executeToolCalls(toolCalls, async (call) => (confirmTool ? confirmTool(call) : false), mode, signal)
 
 		if (isGenerationStopped()) return response
+
+		// Show tool results to the user
+		const displayMessage = formatToolResultsForDisplay(results)
+		if (displayMessage) {
+			onToolMessage?.(displayMessage)
+		}
 
 		response = await send(formatResultsMessage(results))
 	}
