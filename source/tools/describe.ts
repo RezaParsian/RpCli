@@ -122,15 +122,11 @@ export function describeToolActivity(call: ToolCall): string {
 }
 
 /**
- * Replaces every <tool_call> block in the assistant's raw content with a short
- * one-line activity description, in order. Useful for rendering a live "doing X, then Y..."
+ * Replaces the <tool_calls> block in the assistant's raw content with short
+ * activity descriptions. Useful for rendering a live "doing X, then Y..."
  * status instead of showing the raw tags while a batch executes.
  */
 export function formatToolActivityMessage(assistantContent: string, calls: ToolCall[]): string {
-	let index = 0
-	return assistantContent.replace(/<tool_call\s+name="[^"]+">[\s\S]*?<\/tool_call>/g, () => {
-		const call = calls[index]
-		index += 1
-		return call ? `⚙  ${describeToolActivity(call)}` : ''
-	})
+	const activity = calls.map((call) => `⚙  ${describeToolActivity(call)}`).join('\n')
+	return assistantContent.replace(/<tool_calls>[\s\S]*?<\/tool_calls>/g, activity)
 }

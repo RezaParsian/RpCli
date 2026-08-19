@@ -10,7 +10,7 @@ function normalizeParamValue(value: string): string {
 	if (closingWrapper) {
 		result = result.slice(0, -(closingWrapper[0]?.length ?? 0))
 
-		// Tool calls indent <param> one level and their multiline value one
+		// Tool calls indent <parameter> one level and their multiline value one
 		// additional level. Remove those two wrapper levels from the first
 		// content line only; indentation belonging to the value remains intact.
 		const tagIndent = closingWrapper[1] ?? ''
@@ -25,7 +25,7 @@ function normalizeParamValue(value: string): string {
 
 function parseParams(body: string): Record<string, unknown> {
 	const arguments_: Record<string, unknown> = {}
-	const paramPattern = /<param\s+name="([^"]+)">([\s\S]*?)<\/param>/g
+	const paramPattern = /<parameter\s+name="([^"]+)">([\s\S]*?)<\/parameter>/g
 	let paramMatch: RegExpExecArray | null
 
 	while ((paramMatch = paramPattern.exec(body)) !== null) {
@@ -38,7 +38,7 @@ function parseParams(body: string): Record<string, unknown> {
 }
 
 /**
- * Parses the first <tool_call> block found in the content, if any.
+ * Parses the first <invoke> block found in the content, if any.
  * Kept for backwards compatibility with single-call call sites.
  */
 export function parseToolCall(content: string): ToolCall | undefined {
@@ -47,25 +47,34 @@ export function parseToolCall(content: string): ToolCall | undefined {
 }
 
 /**
- * Parses every <tool_call> block found in the content, in the order they appear.
- * A response with no tool_call blocks returns an empty array.
- * A tool_call block with no <param> tags throws, since that indicates malformed model output.
+ * Parses every <invoke> block inside a <tool_calls> wrapper, in the order they appear.
+ * A response with no complete tool_calls wrapper returns an empty array.
+ * An invoke block with no <parameter> tags throws, since that indicates malformed model output.
  */
 export function parseToolCalls(content: string): ToolCall[] {
 	const calls: ToolCall[] = []
-	const callPattern = /<tool_call\s+name="([^"]+)">\s*([\s\S]*?)\s*<\/tool_call>/g
+	const wrapperPattern = /<tool_calls>\s*([\s\S]*?)\s*<\/tool_calls>/g
+	const callPattern = /<invoke\s+name="([^"]+)">\s*([\s\S]*?)\s*<\/invoke>/g
+	let wrapperMatch: RegExpExecArray | null
 	let callMatch: RegExpExecArray | null
 
-	while ((callMatch = callPattern.exec(content)) !== null) {
-		const [, name, body] = callMatch
-		if (!name || body === undefined) continue
+	while ((wrapperMatch = wrapperPattern.exec(content)) !== null) {
+		const wrapperBody = wrapperMatch[1] ?? ''
+		callPattern.lastIndex = 0
 
-		const arguments_ = parseParams(body)
-		if (Object.keys(arguments_).length === 0) {
-			throw new TypeError(`Invalid tool call "${name}". Expected at least one <param name="...">value</param> tag.`)
+		while ((callMatch = callPattern.exec(wrapperBody)) !== null) {
+			const [, name, body] = callMatch
+			if (!name || body === undefined) continue
+
+			const arguments_ = parseParams(body)
+			if (Object.keys(arguments_).length === 0) {
+				throw new TypeError(
+					`Invalid tool call "${name}". Expected at least one <parameter name="...">value</parameter> tag.`
+				)
+			}
+
+			calls.push({ name, arguments: arguments_ })
 		}
-
-		calls.push({ name, arguments: arguments_ })
 	}
 
 	return calls
@@ -73,8 +82,8 @@ export function parseToolCalls(content: string): ToolCall[] {
 
 /** Hides complete and partially streamed tool-call markup from user-facing text. */
 export function hideStreamingToolCalls(content: string): string {
-	const marker = '<tool_call'
-	let visible = content.replace(/<tool_call\s+name="[^"]+">[\s\S]*?<\/tool_call>/g, '')
+	const marker = '<tool_calls'
+	let visible = content.replace(/<tool_calls>[\s\S]*?<\/tool_calls>/g, '')
 	const incompleteCall = visible.indexOf(marker)
 	if (incompleteCall !== -1) visible = visible.slice(0, incompleteCall)
 
