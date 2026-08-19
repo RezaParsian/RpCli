@@ -36,7 +36,8 @@ export async function executeTool(call: ToolCall, signal?: AbortSignal): Promise
 }
 
 /**
- * Executes a batch of tool calls sequentially, in the order they were parsed.
+ * Executes independent read-only calls concurrently, while preserving result order.
+ * Batches containing a mutating call execute sequentially in parsed order.
  * - Stops (does not execute) the batch as soon as a declined confirmation is hit.
  * - Individual tool failures do NOT stop the batch; they're recorded as ok: false
  *   in that call's result and execution continues with the next call, so the model
@@ -51,6 +52,15 @@ export async function executeToolCalls(
 	mode: ToolMode,
 	signal?: AbortSignal
 ): Promise<ToolResult[]> {
+	if (signal?.aborted) return []
+
+	// Models batch independent reads in one <tool_calls> block. Run those calls
+	// concurrently so several repository searches do not repeatedly scan the
+	// workspace one after another. Promise.all preserves the model's call order.
+	if (calls.every((call) => !toolIsMutating(call))) {
+		return Promise.all(calls.map(async (call) => executeTool(call, signal)))
+	}
+
 	const results: ToolResult[] = []
 	let declined = false
 
