@@ -1,6 +1,10 @@
 import type { ToolCall } from './types.js'
 
+function stripDsml(content: string): string {
 	return content.replace(/<([/]?)｜+DSML｜+(?=tool_calls|invoke|parameter)/g, '<$1')
+}
+
+function normalizeParamValue(value: string): string {
 	const openingNewline = /^(\r?\n)/.exec(value)?.[1]
 	if (!openingNewline) return value
 
@@ -61,12 +65,13 @@ export function parseToolCall(content: string): ToolCall | undefined {
  */
 export function parseToolCalls(content: string): ToolCall[] {
 	const calls: ToolCall[] = []
+	const sanitized = stripDsml(content)
 	const wrapperPattern = /<tool_calls>\s*([\s\S]*?)\s*<\/tool_calls>/g
 	const callPattern = /<invoke\s+name="([^"]+)">\s*([\s\S]*?)\s*<\/invoke>/g
 	let wrapperMatch: RegExpExecArray | null
 	let callMatch: RegExpExecArray | null
 
-	while ((wrapperMatch = wrapperPattern.exec(content)) !== null) {
+	while ((wrapperMatch = wrapperPattern.exec(sanitized)) !== null) {
 		const wrapperBody = wrapperMatch[1] ?? ''
 		callPattern.lastIndex = 0
 
@@ -89,7 +94,7 @@ export function parseToolCalls(content: string): ToolCall[] {
 		}
 	}
 
-	if (content.replace(wrapperPattern, '').includes('<tool_calls')) {
+	if (sanitized.replace(wrapperPattern, '').includes('<tool_calls')) {
 		throw new TypeError('Invalid tool calls block. Expected a closing </tool_calls> tag.')
 	}
 
@@ -98,8 +103,9 @@ export function parseToolCalls(content: string): ToolCall[] {
 
 /** Hides complete and partially streamed tool-call markup from user-facing text. */
 export function hideStreamingToolCalls(content: string): string {
-	const markers = ['<tool_calls', '<｜DSML｜tool_calls', '<｜｜DSML｜｜tool_calls']
-	let visible = content.replace(/<tool_calls>[\s\S]*?<\/tool_calls>/g, '')
+	const sanitized = stripDsml(content)
+	const marker = '<tool_calls'
+	let visible = sanitized.replace(/<tool_calls>[\s\S]*?<\/tool_calls>/g, '')
 	const incompleteCall = visible.indexOf(marker)
 	if (incompleteCall !== -1) visible = visible.slice(0, incompleteCall)
 

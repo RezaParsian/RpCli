@@ -13,6 +13,7 @@ const cli = meow(
 	Usage
 	  $ rc                           Open interactive chat
 	  $ rc <prompt>                  Send a single prompt
+	  $ rc resume <session-id>       Resume a previous chat by session ID
 	  $ rc -t <prompt>               Send a prompt with thinking enabled
 	  $ rc -tq <prompt>              Think silently and show only the answer
 	  $ rc -s <prompt>               Enable web search for a prompt
@@ -35,6 +36,7 @@ const cli = meow(
 	Examples
 	  $ rc
 	  $ rc "explain bubble sort in 2 sentences"
+	  $ rc resume 9edd57b7-ffb1-43dc-a2df-d0df21c0d37f
 	  $ rc -t "solve this step by step"
 	  $ rc -tq "say 1"
 	  $ rc -c
@@ -70,7 +72,15 @@ if (firstArg === 'serve') {
 	const { default: App } = await import('./app.js')
 	const React = await import('react')
 
-	const prompt = cli.input.join(' ').trim()
+	const isResume = firstArg === 'resume'
+	const resumeSessionId = isResume ? cli.input[1] : undefined
+
+	if (isResume && !resumeSessionId) {
+		console.error('Error: A session ID is required. Usage: rc resume <session-id>')
+		process.exit(1)
+	}
+
+	const prompt = isResume ? '' : cli.input.join(' ').trim()
 	const mode = cli.flags.commitMessage ? 'commit' : prompt ? 'prompt' : 'interactive'
 
 	render(
@@ -78,6 +88,7 @@ if (firstArg === 'serve') {
 			mode,
 			commitAll: cli.flags.commitAll ?? false,
 			prompt,
+			resumeSessionId,
 			thinking: cli.flags.thinking ?? false,
 			quiet: cli.flags.quiet ?? false,
 			search: cli.flags.search ?? false,
