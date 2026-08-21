@@ -30,6 +30,7 @@ import sendMessage, {
 } from '../core/apiClient.js'
 import { chatLogDirectory, isChatLoggingEnabled, setChatLoggingEnabled } from '../core/LogChat.js'
 import { getModelPreference, saveModelPreference } from '../core/TokenConfig.js'
+import { loadSessionTranscript, saveSessionTranscript } from '../core/SessionTranscript.js'
 
 type Props = {
 	version?: string
@@ -92,6 +93,7 @@ export default function InteractiveChatView({
 	const rawBackspaceModifiers = useRef<boolean[]>([])
 	const handleSubmitRef = useRef<(value: string, options?: SubmitOptions) => void>(() => undefined)
 	const mentionListGeneration = useRef(0)
+	const transcriptReady = useRef(false)
 
 	useEffect(() => {
 		const rememberBackspaceEncoding = (data: Buffer | string) => {
@@ -114,9 +116,18 @@ export default function InteractiveChatView({
 			setModelType(saved)
 			if (resumeSessionId) {
 				setCurrentSessionId(resumeSessionId)
+				try {
+					const restored = await loadSessionTranscript(resumeSessionId)
+					if (restored.length > 0) {
+						setMessages((previous) => [...previous, ...restored])
+					}
+				} catch {
+					// Fall back to an empty transcript if the file is unreadable.
+				}
 			} else {
 				resetChatSession()
 			}
+			transcriptReady.current = true
 			setModelLoaded(true)
 		}
 		init()
@@ -125,6 +136,15 @@ export default function InteractiveChatView({
 			void deleteUnusedSession()
 		}
 	}, [deleteUnusedSession, unmounted])
+
+	useEffect(() => {
+		if (!modelLoaded || !transcriptReady.current) return
+
+		const sessionId = getCurrentSessionId()
+		if (!sessionId) return
+
+		void saveSessionTranscript(sessionId, messages)
+	}, [messages, modelLoaded])
 
 	const fileQuery = mentionQuery(input) ?? ''
 	const commandQuery = slashCommandQuery(input) ?? ''

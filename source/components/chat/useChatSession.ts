@@ -2,6 +2,7 @@ import { useCallback, useRef, type Dispatch, type SetStateAction } from 'react'
 import { getChatSystemPrompt, getAIResponse } from '../../actions/agent.js'
 import { getCurrentSessionId, resetChatSession } from '../../core/apiClient.js'
 import { deleteSession, isInvalidTokenError } from '../../../core-lib/index.js'
+import { deleteSessionTranscript } from '../../core/SessionTranscript.js'
 import type { ChatMessage } from './types.js'
 
 type Options = {
@@ -29,6 +30,7 @@ export function useChatSession({ token, onInvalidToken, setMessages, resumeSessi
 
 		sessionDeleted.current = true
 		await deleteSession(token, id).catch(() => undefined)
+		await deleteSessionTranscript(id).catch(() => undefined)
 	}, [token])
 
 	const startSession = useCallback(
@@ -124,6 +126,11 @@ export function useChatSession({ token, onInvalidToken, setMessages, resumeSessi
 	)
 
 	const resetConversation = useCallback(() => {
+		const id = sessionId.current ?? getCurrentSessionId()
+		if (id) {
+			void deleteSessionTranscript(id).catch(() => undefined)
+		}
+
 		void deleteUnusedSession()
 		sessionDeleted.current = false
 		hasUserMessage.current = false
