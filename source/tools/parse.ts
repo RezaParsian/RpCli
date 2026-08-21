@@ -4,6 +4,11 @@ function stripDsml(content: string): string {
 	return content.replace(/<([/]?)｜+DSML｜+(?=tool_calls|invoke|parameter)/g, '<$1')
 }
 
+function normalizeToolCallsWrapper(content: string): string {
+	// Normalize any closing tag ending in "_calls" to the expected wrapper.
+	return content.replace(/<\/[^>]*calls[^>]*>/g, '</' + 'tool_calls>')
+}
+
 function normalizeParamValue(value: string): string {
 	const openingNewline = /^(\r?\n)/.exec(value)?.[1]
 	if (!openingNewline) return value
@@ -65,7 +70,7 @@ export function parseToolCall(content: string): ToolCall | undefined {
  */
 export function parseToolCalls(content: string): ToolCall[] {
 	const calls: ToolCall[] = []
-	const sanitized = stripDsml(content)
+	const sanitized = normalizeToolCallsWrapper(stripDsml(content))
 	const wrapperPattern = /<tool_calls>\s*([\s\S]*?)\s*<\/tool_calls>/g
 	const callPattern = /<invoke\s+name="([^"]+)">\s*([\s\S]*?)\s*<\/invoke>/g
 	let wrapperMatch: RegExpExecArray | null
@@ -103,7 +108,7 @@ export function parseToolCalls(content: string): ToolCall[] {
 
 /** Hides complete and partially streamed tool-call markup from user-facing text. */
 export function hideStreamingToolCalls(content: string): string {
-	const sanitized = stripDsml(content)
+	const sanitized = normalizeToolCallsWrapper(stripDsml(content))
 	const marker = '<tool_calls'
 	let visible = sanitized.replace(/<tool_calls>[\s\S]*?<\/tool_calls>/g, '')
 	const incompleteCall = visible.indexOf(marker)
