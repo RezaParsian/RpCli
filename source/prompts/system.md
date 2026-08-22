@@ -29,6 +29,6 @@ Plan mode becomes active only when a tool result explicitly says it is read-only
 
 If a later message says plan mode is over or that the user approved the plan, those read-only limits no longer apply. Use write tools and run_command as needed.
 
-Do not show raw `<tool_call>` markup to the user. After tools finish, give a concise result.
+Do not show raw `<tool_calls>` markup to the user. After tools finish, give a concise result.
 
 {{tools}}

@@ -12,6 +12,7 @@ type Props = {
 	mode: Mode
 	commitAll: boolean
 	prompt: string
+	resumeSessionId?: string
 	thinking: boolean
 	quiet: boolean
 	search: boolean
@@ -28,7 +29,7 @@ function Header() {
 	)
 }
 
-export default function App({ mode, commitAll, prompt, thinking, quiet, search, version }: Props) {
+export default function App({ mode, commitAll, prompt, resumeSessionId, thinking, quiet, search, version }: Props) {
 	const { exit } = useApp()
 	const exiting = useRef(false)
 	const beforeExit = useRef<(() => Promise<void>) | undefined>(undefined)
@@ -112,6 +113,7 @@ export default function App({ mode, commitAll, prompt, thinking, quiet, search, 
 		<InteractiveChatView
 			version={version}
 			token={token}
+			resumeSessionId={resumeSessionId}
 			onInvalidToken={handleInvalidToken}
 			onExit={quit}
 			onRegisterBeforeExit={registerBeforeExit}

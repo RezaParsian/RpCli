@@ -186,17 +186,19 @@ RP-CLI tells the model about local tools and executes tool calls returned by the
 
 When the user asks for a file, the model is instructed to write it with `write_file` rather than paste the contents into the chat.
 
-For each tool call, RP-CLI keeps the assistant's explanatory text in the chat and replaces the raw `<tool_call>` markup with a human-readable activity message. The assistant can chain tool calls; after 10 rounds it stops and you can type `/continue`.
+For each tool call, RP-CLI keeps the assistant's explanatory text in the chat and replaces the raw `<tool_calls>` markup with a human-readable activity message. The assistant can chain tool calls; after 10 rounds it stops and you can type `/continue`.
 
 All paths are restricted to the directory where RP-CLI was started. To add another tool, register it in `source/tools/registry.ts`; the system prompt is generated from the same registry. Tool calls use this protocol:
 
 ```xml
-<tool_call name="read_file">
-  <param name="path">package.json</param>
-</tool_call>
+<tool_calls>
+  <invoke name="read_file">
+    <parameter name="path">package.json</parameter>
+  </invoke>
+</tool_calls>
 ```
 
-Write literal `<` and `>` inside parameter values. Do not convert them to `&lt;` or `&gt;`. The only sequences that must not appear unescaped in a value are `</param>` and `</tool_call>`.
+Write literal `<` and `>` inside parameter values. Do not convert them to `&lt;` or `&gt;`. The only sequences that must not appear unescaped in a value are `</parameter>`, `</invoke>`, and `</tool_calls>`.
 
 ## Configuration
 

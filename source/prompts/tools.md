@@ -1,43 +1,51 @@
-You have access to the tools below. When a tool is needed, respond using exactly this format:
+You have access to the tools below. When one or more tools are needed, respond using exactly this format:
 
-<tool_call name="tool_name">
-<param name="param_name">value</param>
-</tool_call>
+<tool_calls>
+<invoke name="tool_name">
+<parameter name="parameter_name">value</parameter>
+</invoke>
+</tool_calls>
 
-For multi-line values (like file content or code), put the value on its own lines between the tags. Start the value at
-column zero; indentation inside the value must belong to the value itself. Do NOT escape quotes, backslashes, or
-newlines:
+Put every independent tool invocation inside the same `<tool_calls>` block. For multi-line values (like file content or
+code), put the value on its own lines between the tags. Start the value at column zero; indentation inside the value must
+belong to the value itself. Do NOT escape quotes, backslashes, or newlines:
 
-<tool_call name="edit_file">
-<param name="path">src/example.tsx</param>
-<param name="old_text">
+<tool_calls>
+<invoke name="edit_file">
+<parameter name="path">src/example.tsx</parameter>
+<parameter name="old_text">
 const x = 1;
-</param>
-<param name="new_text">
+</parameter>
+<parameter name="new_text">
 const x = 2;
-</param>
-</tool_call>
+</parameter>
+</invoke>
+</tool_calls>
 
 Write literal `<` and `>` inside values. Do not convert them to `&lt;` or `&gt;`. The only sequences that must not appear
-unescaped in a value are `</param>` and `</tool_call>`:
+unescaped in a value are `</parameter>`, `</invoke>`, and `</tool_calls>`:
 
-<tool_call name="write_file">
-<param name="path">index.html</param>
-<param name="content">
+<tool_calls>
+<invoke name="write_file">
+<parameter name="path">index.html</parameter>
+<parameter name="content">
 <!DOCTYPE html>
 <html>
 	<body>test</body>
 </html>
-</param>
-</tool_call>
+</parameter>
+</invoke>
+</tool_calls>
 
-You may include MULTIPLE `<tool_call>` blocks in a single response, one after another, when the calls are independent
-(e.g. reading or editing several unrelated files).
+You may include MULTIPLE `<invoke>` blocks in a single `<tool_calls>` block when the calls are independent (e.g. reading
+or editing several unrelated files).
 
 ## Do NOT
 
 - Batch calls where a later call depends on an earlier result (e.g. read a file to decide what to write). Call the first
   tool, wait for its result, then continue.
+- Output an `<invoke>` outside the single `<tool_calls>` wrapper.
+- Add `DSML` prefixes or control markers to any tag. Write `<tool_calls>` exactly as shown above.
 - Escape quotes, backslashes, or newlines in multi-line values.
 - Convert literal `<` and `>` to `&lt;` / `&gt;`.
 - Paste a full file into the chat. Use `write_file` so it lands on disk.
@@ -64,4 +72,4 @@ re-read the file and retry with a smaller, verbatim snippet.
 {{toolsList}}
 
 Tool results are returned in the same order as the calls. If no tool is needed, answer directly without any
-`<tool_call>` tag.
+`<tool_calls>` tag.

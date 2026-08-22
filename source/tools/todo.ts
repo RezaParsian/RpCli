@@ -202,7 +202,7 @@ export const todoTools = [
 
 			// Create new subtasks
 			const subtaskIds: number[] = []
-			for (const desc of subtaskDescriptions) {
+			for (const desc of subtaskArray) {
 				const subId = nextId++
 				const subTodo: Todo = {
 					id: subId,

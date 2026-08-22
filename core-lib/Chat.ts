@@ -164,6 +164,7 @@ export default async function chat({
 	let flatThinkingContent = ''
 	let usingFragments = false
 	let activePatchPath = ''
+	let streamError: { message: string; finishReason?: string } | undefined
 	const emitChunk = (type: ChatStreamChunk['type'], content: string) => {
 		if (content) onChunk?.({ type, content, messageId: result.messageId ?? null })
 	}
@@ -244,6 +245,22 @@ export default async function chat({
 							flatThinkingContent += r.thinking_content
 							emitChunk('thinking', r.thinking_content)
 						}
+					}
+					continue
+				}
+
+				if (parsed.type === 'error') {
+					const message =
+						typeof parsed.content === 'string' ? parsed.content : 'The model could not complete the request.'
+					const finishReason = typeof parsed.finish_reason === 'string' ? parsed.finish_reason : undefined
+					streamError = { message, finishReason }
+					result.status = finishReason ?? 'ERROR'
+					result.finished = true
+
+					if (parsed.clear_response === true) {
+						fragments.length = 0
+						flatContent = ''
+						flatThinkingContent = ''
 					}
 					continue
 				}
@@ -391,6 +408,14 @@ export default async function chat({
 				.map((fragment) => fragment.content)
 				.join('')
 		: flatThinkingContent
+
+	if (streamError) {
+		result.ok = false
+		result.error =
+			streamError.finishReason === 'expert_busy_use_default'
+				? `${streamError.message} Switch to the default model and try again.`
+				: streamError.message
+	}
 
 	// Log raw events if a log function is provided
 	if (logFn) {

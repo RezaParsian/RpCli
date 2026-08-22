@@ -1,40 +1,54 @@
-import React, {useCallback, useEffect, useRef, useState} from 'react'
-import {Box, Static, Text, useInput, useStdin} from 'ink'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { Box, Static, Text, useInput, useStdin } from 'ink'
 import Spinner from './Spinner.js'
-import {ToolConfirmation, useToolConfirmation} from './ToolConfirmation.js'
-import {TextArea} from 'react-ink-textarea'
-import FzfFilePicker, {createMentionEntries} from './FzfFilePicker.js'
+import { ToolConfirmation, useToolConfirmation } from './ToolConfirmation.js'
+import { TextArea } from 'react-ink-textarea'
+import FzfFilePicker, { createMentionEntries } from './FzfFilePicker.js'
 import SlashCommandPicker from './SlashCommandPicker.js'
 import ChatStatusBar from './chat/ChatStatusBar.js'
-import {createLiveStream} from './chat/createLiveStream.js'
-import {MessageRow} from './chat/MessageRow.js'
+import { createLiveStream } from './chat/createLiveStream.js'
+import { MessageRow } from './chat/MessageRow.js'
 import PlanConfirmation from './chat/PlanConfirmation.js'
 import ModelConfirmation from './chat/ModelConfirmation.js'
-import type {ChatMessage, SubmitOptions} from './chat/types.js'
-import {loadingSpinnerText} from './chat/types.js'
-import {useChatSession} from './chat/useChatSession.js'
-import {useComposerKeys} from './chat/useComposerKeys.js'
-import {formatSlashCommandHelp, resolveSlashCommand, type SlashCommand} from '../commands/index.js'
-import {hideStreamingToolCalls} from '../tools/index.js'
-import {getTodoList} from '../tools/todo.js'
-import {ContinuePrompt, ExecutePlanPrompt, InitPrompt, PlanPrompt, readAgentsMarkdown} from '../prompts/index.js'
-import {isInvalidTokenError} from '../../core-lib/index.js'
+import type { ChatMessage, SubmitOptions } from './chat/types.js'
+import { loadingSpinnerText } from './chat/types.js'
+import { useChatSession } from './chat/useChatSession.js'
+import { useComposerKeys } from './chat/useComposerKeys.js'
+import { formatSlashCommandHelp, resolveSlashCommand, type SlashCommand } from '../commands/index.js'
+import { hideStreamingToolCalls } from '../tools/index.js'
+import { getTodoList } from '../tools/todo.js'
+import { ContinuePrompt, ExecutePlanPrompt, InitPrompt, PlanPrompt, readAgentsMarkdown } from '../prompts/index.js'
+import { isInvalidTokenError } from '../../core-lib/index.js'
 import listWorkspaceFiles from '../core/ListWorkspaceFiles.js'
-import {endPosition, mentionQuery, slashCommandQuery} from '../core/textCursor.js'
-import {type ChatMode, getAIResponse} from '../actions/agent.js'
-import sendMessage, {resetChatSession, stopCurrentGeneration} from '../core/apiClient.js'
-import {chatLogDirectory, isChatLoggingEnabled, setChatLoggingEnabled} from '../core/LogChat.js'
-import {getModelPreference, saveModelPreference} from '../core/TokenConfig.js'
+import { endPosition, mentionQuery, slashCommandQuery } from '../core/textCursor.js'
+import { type ChatMode, getAIResponse } from '../actions/agent.js'
+import sendMessage, {
+	getCurrentSessionId,
+	resetChatSession,
+	setCurrentSessionId,
+	stopCurrentGeneration,
+} from '../core/apiClient.js'
+import { chatLogDirectory, isChatLoggingEnabled, setChatLoggingEnabled } from '../core/LogChat.js'
+import { getModelPreference, saveModelPreference } from '../core/TokenConfig.js'
+import { loadSessionTranscript, saveSessionTranscript } from '../core/SessionTranscript.js'
 
 type Props = {
 	version?: string
 	token: string
+	resumeSessionId?: string
 	onInvalidToken: () => void
 	onExit: (code?: number) => void
 	onRegisterBeforeExit?: (cleanup?: () => Promise<void>) => void
 }
 
-export default function InteractiveChatView({ version, token, onInvalidToken, onExit, onRegisterBeforeExit }: Props) {
+export default function InteractiveChatView({
+	version,
+	token,
+	resumeSessionId,
+	onInvalidToken,
+	onExit,
+	onRegisterBeforeExit,
+}: Props) {
 	const [messages, setMessages] = useState<ChatMessage[]>([
 		{
 			id: 'header-logo',
@@ -60,25 +74,26 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 	const [awaitingPlanStart, setAwaitingPlanStart] = useState(false)
 	const [awaitingModelConfirmation, setAwaitingModelConfirmation] = useState(false)
 	const [pendingModel, setPendingModel] = useState<'default' | 'expert'>('default')
+	const [showExitInfo, setShowExitInfo] = useState(false)
 	const modeBeforePlan = useRef<ChatMode>('normal')
 
 	const {
-		initialization,
 		initializationSucceeded,
 		hasUserMessage,
 		unmounted,
 		stopRequested,
 		deleteUnusedSession,
-		startSession,
+		ensureSession,
 		resetConversation,
 		switchModel,
-	} = useChatSession({ token, onInvalidToken, setMessages })
+	} = useChatSession({ token, onInvalidToken, setMessages, resumeSessionId })
 
 	const { pending, confirmTool } = useToolConfirmation()
 	const { stdin } = useStdin()
 	const rawBackspaceModifiers = useRef<boolean[]>([])
 	const handleSubmitRef = useRef<(value: string, options?: SubmitOptions) => void>(() => undefined)
 	const mentionListGeneration = useRef(0)
+	const transcriptReady = useRef(false)
 
 	useEffect(() => {
 		const rememberBackspaceEncoding = (data: Buffer | string) => {
@@ -99,18 +114,37 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 			const saved = await getModelPreference()
 			modelTypeRef.current = saved
 			setModelType(saved)
-			setModelLoaded(true)
-			resetChatSession()
-			if (!unmounted.current) {
-				startSession(saved)
+			if (resumeSessionId) {
+				setCurrentSessionId(resumeSessionId)
+				try {
+					const restored = await loadSessionTranscript(resumeSessionId)
+					if (restored.length > 0) {
+						setMessages((previous) => [...previous, ...restored])
+					}
+				} catch {
+					// Fall back to an empty transcript if the file is unreadable.
+				}
+			} else {
+				resetChatSession()
 			}
+			transcriptReady.current = true
+			setModelLoaded(true)
 		}
 		init()
 		return () => {
 			unmounted.current = true
 			void deleteUnusedSession()
 		}
-	}, [startSession, deleteUnusedSession, unmounted])
+	}, [deleteUnusedSession, unmounted])
+
+	useEffect(() => {
+		if (!modelLoaded || !transcriptReady.current) return
+
+		const sessionId = getCurrentSessionId()
+		if (!sessionId) return
+
+		void saveSessionTranscript(sessionId, messages)
+	}, [messages, modelLoaded])
 
 	const fileQuery = mentionQuery(input) ?? ''
 	const commandQuery = slashCommandQuery(input) ?? ''
@@ -144,7 +178,7 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 				{
 					id: `console-${Date.now()}-${Math.random()}`,
 					role: 'console',
-					content: `Model switched to ${newModel}. Chat session reset.`,
+					content: `Model switched to ${newModel}.`,
 				},
 			])
 			setAwaitingModelConfirmation(false)
@@ -170,6 +204,11 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 			return
 		}
 
+		if (!showExitInfo && getCurrentSessionId()) {
+			setShowExitInfo(true)
+			return
+		}
+
 		onExit(130)
 	})
 
@@ -182,7 +221,14 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 		setCommandPickerOpen,
 		setMode,
 		rawBackspaceModifiers,
-		isActive: !filePickerOpen && !commandPickerOpen && !loading && !pending && !awaitingPlanStart && !awaitingModelConfirmation && modelLoaded,
+		isActive:
+			!filePickerOpen &&
+			!commandPickerOpen &&
+			!loading &&
+			!pending &&
+			!awaitingPlanStart &&
+			!awaitingModelConfirmation &&
+			modelLoaded,
 	})
 
 	const handleInputChange = useCallback((value: string) => {
@@ -229,7 +275,7 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 				clear() {
 					if (loading) return
 
-					resetConversation(modelTypeRef.current)
+					resetConversation()
 					setInput('')
 					setCursorPosition([0, 0])
 					setStreamingMessages([])
@@ -323,15 +369,36 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 						return
 					}
 					const newModel = modelTypeRef.current === 'default' ? 'expert' : 'default'
+					if (!hasUserMessage.current) {
+						modelTypeRef.current = newModel
+						setModelType(newModel)
+						void saveModelPreference(newModel)
+						setMessages((previous) => [
+							...previous,
+							{
+								id: `console-${Date.now()}-${Math.random()}`,
+								role: 'console',
+								content: `Model switched to ${newModel}.`,
+							},
+						])
+						setInput('')
+						return
+					}
 					setPendingModel(newModel)
 					setAwaitingModelConfirmation(true)
 					setInput('')
 				},
 
-				exit: onExit,
+				exit() {
+					if (!showExitInfo && getCurrentSessionId()) {
+						setShowExitInfo(true)
+						return
+					}
+					onExit()
+				},
 			})
 		},
-		[loading, onExit, resetConversation, awaitingModelConfirmation, modelLoaded]
+		[loading, onExit, resetConversation, awaitingModelConfirmation, modelLoaded, hasUserMessage]
 	)
 
 	const updateCommandQuery = useCallback((query: string) => {
@@ -443,7 +510,7 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 
 			void (async () => {
 				try {
-					await initialization.current
+					await ensureSession(modelTypeRef.current)
 
 					if (stopRequested.current || !initializationSucceeded.current) {
 						return
@@ -583,8 +650,8 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 		},
 		[
 			confirmTool,
+			ensureSession,
 			hasUserMessage,
-			initialization,
 			initializationSucceeded,
 			loading,
 			mode,
@@ -635,8 +702,22 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 		})
 	}, [])
 
+	const resumeCommand = getCurrentSessionId() ? `rc resume ${getCurrentSessionId()}` : 'rc resume <session-id>'
+
 	return (
 		<Box flexDirection="column">
+			{showExitInfo && (
+				<Box flexDirection="column" marginX={1} marginY={1} borderStyle="single" borderColor="yellow" paddingX={1}>
+					<Text bold color="yellow">
+						Session not deleted.
+					</Text>
+					<Text>You can continue this chat later with:</Text>
+					<Text bold color="cyan">
+						{resumeCommand}
+					</Text>
+					<Text dimColor>Press Ctrl+C again to exit.</Text>
+				</Box>
+			)}
 			<Static items={messages}>{(msg) => <MessageRow key={msg.id} msg={msg} version={version} />}</Static>
 
 			<Box flexDirection="column" marginX={1} marginTop={1}>
@@ -666,7 +747,7 @@ export default function InteractiveChatView({ version, token, onInvalidToken, on
 								{
 									id: `console-${Date.now()}-${Math.random()}`,
 									role: 'console',
-									content: `Model switched to ${newModel}. Chat session reset.`,
+									content: `Model switched to ${newModel}.`,
 								},
 							])
 							setAwaitingModelConfirmation(false)
