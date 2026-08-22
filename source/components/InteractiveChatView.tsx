@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Box, Static, Text, useInput, useStdin } from 'ink'
+import { Box, Text, useInput, useStdin, useStdout } from 'ink'
+import { ScrollView, type ScrollViewRef } from 'ink-scroll-view'
 import Spinner from './Spinner.js'
 import { ToolConfirmation, useToolConfirmation } from './ToolConfirmation.js'
 import { TextArea } from 'react-ink-textarea'
@@ -75,7 +76,11 @@ export default function InteractiveChatView({
 	const [awaitingModelConfirmation, setAwaitingModelConfirmation] = useState(false)
 	const [pendingModel, setPendingModel] = useState<'default' | 'expert'>('default')
 	const [showExitInfo, setShowExitInfo] = useState(false)
+	const { stdout } = useStdout()
+	const [terminalHeight, setTerminalHeight] = useState(() => stdout.rows ?? 24)
 	const modeBeforePlan = useRef<ChatMode>('normal')
+	const scrollRef = useRef<ScrollViewRef>(null)
+	const followOutput = useRef(true)
 
 	const {
 		initializationSucceeded,
@@ -94,6 +99,18 @@ export default function InteractiveChatView({
 	const handleSubmitRef = useRef<(value: string, options?: SubmitOptions) => void>(() => undefined)
 	const mentionListGeneration = useRef(0)
 	const transcriptReady = useRef(false)
+
+	useEffect(() => {
+		const handleResize = () => {
+			setTerminalHeight(stdout.rows ?? 24)
+			scrollRef.current?.remeasure()
+		}
+
+		stdout.on('resize', handleResize)
+		return () => {
+			stdout.off('resize', handleResize)
+		}
+	}, [stdout])
 
 	useEffect(() => {
 		const rememberBackspaceEncoding = (data: Buffer | string) => {
@@ -126,6 +143,7 @@ export default function InteractiveChatView({
 				}
 			} else {
 				resetChatSession()
+				void ensureSession(saved)
 			}
 			transcriptReady.current = true
 			setModelLoaded(true)
@@ -135,7 +153,7 @@ export default function InteractiveChatView({
 			unmounted.current = true
 			void deleteUnusedSession()
 		}
-	}, [deleteUnusedSession, unmounted])
+	}, [deleteUnusedSession, ensureSession, resumeSessionId, unmounted])
 
 	useEffect(() => {
 		if (!modelLoaded || !transcriptReady.current) return
@@ -150,6 +168,20 @@ export default function InteractiveChatView({
 	const commandQuery = slashCommandQuery(input) ?? ''
 
 	useInput((pressedInput, key) => {
+		if (!filePickerOpen && !commandPickerOpen && key.pageUp) {
+			followOutput.current = false
+			const height = scrollRef.current?.getViewportHeight() ?? 1
+			scrollRef.current?.scrollBy(-height)
+			return
+		}
+
+		if (!filePickerOpen && !commandPickerOpen && key.pageDown) {
+			const height = scrollRef.current?.getViewportHeight() ?? 1
+			scrollRef.current?.scrollBy(height)
+			followOutput.current = (scrollRef.current?.getScrollOffset() ?? 0) >= (scrollRef.current?.getBottomOffset() ?? 0) - 1
+			return
+		}
+
 		if (key.escape && loading) {
 			stopRequested.current = true
 			if (initializationSucceeded.current) {
@@ -705,30 +737,61 @@ export default function InteractiveChatView({
 	const resumeCommand = getCurrentSessionId() ? `rc resume ${getCurrentSessionId()}` : 'rc resume <session-id>'
 
 	return (
-		<Box flexDirection="column">
-			{showExitInfo && (
-				<Box flexDirection="column" marginX={1} marginY={1} borderStyle="single" borderColor="yellow" paddingX={1}>
-					<Text bold color="yellow">
-						Session not deleted.
-					</Text>
-					<Text>You can continue this chat later with:</Text>
-					<Text bold color="cyan">
-						{resumeCommand}
-					</Text>
-					<Text dimColor>Press Ctrl+C again to exit.</Text>
-				</Box>
-			)}
-			<Static items={messages}>{(msg) => <MessageRow key={msg.id} msg={msg} version={version} />}</Static>
-
-			<Box flexDirection="column" marginX={1} marginTop={1}>
+		<Box flexDirection="column" height={Math.max(terminalHeight, 8)}>
+			<ScrollView
+				ref={scrollRef}
+				height={Math.max(terminalHeight - 5, 3)}
+				flexShrink={1}
+				onScroll={(offset) => {
+					followOutput.current = offset >= (scrollRef.current?.getBottomOffset() ?? 0) - 1
+				}}
+				onContentHeightChange={() => {
+					if (followOutput.current) scrollRef.current?.scrollToBottom()
+				}}
+			>
+				{messages.map((msg) => (
+					<MessageRow key={msg.id} msg={msg} version={version} />
+				))}
 				{streamingMessages.map((msg) => (
 					<MessageRow key={msg.id} msg={msg} version={version} />
 				))}
+				{showExitInfo && (
+					<Box
+						key="exit-info"
+						flexDirection="column"
+						marginX={1}
+						marginY={1}
+						borderStyle="single"
+						borderColor="yellow"
+						paddingX={1}
+					>
+						<Text bold color="yellow">
+							Session not deleted.
+						</Text>
+						<Text>You can continue this chat later with:</Text>
+						<Text bold color="cyan">
+							{resumeCommand}
+						</Text>
+						<Text dimColor>Press Ctrl+C again to exit.</Text>
+					</Box>
+				)}
+			</ScrollView>
 
+			<Box flexDirection="column" flexShrink={0} marginX={1} marginTop={1}>
 				{pending ? (
 					<ToolConfirmation details={pending.details} />
 				) : loading ? (
-					<Spinner text={loadingSpinnerText(streamingMessages)} />
+					<Box flexDirection="column">
+						<ChatStatusBar
+							mode={mode}
+							searchEnabled={searchEnabled}
+							thinkingEnabled={thinkingEnabled}
+							modelType={modelType}
+						/>
+						<Box borderStyle="single" borderLeft={false} borderRight={false} borderColor="cyan">
+							<Spinner text={loadingSpinnerText(streamingMessages)} />
+						</Box>
+					</Box>
 				) : awaitingPlanStart ? (
 					<PlanConfirmation onDecide={handlePlanDecision} />
 				) : awaitingModelConfirmation ? (

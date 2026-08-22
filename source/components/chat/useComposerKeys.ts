@@ -105,13 +105,6 @@ export function useComposerKeys({
 				return
 			}
 
-			if (key.pageUp || key.pageDown) {
-				const direction = key.pageUp ? -1 : 1
-				const targetLine = Math.max(0, Math.min(lines.length - 1, line + direction * 5))
-				setCursorPosition([targetLine, Math.min(column, lines[targetLine]?.length ?? 0)])
-				return
-			}
-
 			if (key.tab) {
 				setMode((previous) => {
 					if (previous === 'normal') return 'yolo'
