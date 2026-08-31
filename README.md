@@ -179,7 +179,7 @@ Thinking and final answers stream to the terminal as they are generated. Raw too
 RP-CLI tells the model about local tools and executes tool calls returned by the model:
 
 - `list_directory(path?)` lists a directory.
-- `read_file(path)` reads a UTF-8 file up to 100 KiB.
+- `read_file(path, offset?, limit?)` reads a UTF-8 file up to 100 KiB, optionally selecting a 1-based line range.
 - `write_file(path, content)` creates or overwrites a file.
 - `edit_file(path, old_text, new_text)` performs a unique exact replacement.
 - `delete_file(path)` deletes a file after user confirmation.

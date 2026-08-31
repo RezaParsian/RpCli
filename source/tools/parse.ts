@@ -106,6 +106,15 @@ export function parseToolCalls(content: string): ToolCall[] {
 	return calls
 }
 
+export function parseResponseToolCalls(content: string, thinkingContent: string): { calls: ToolCall[]; sourceContent: string } {
+	const contentCalls = parseToolCalls(content)
+	if (contentCalls.length > 0 || !thinkingContent) {
+		return { calls: contentCalls, sourceContent: content }
+	}
+
+	return { calls: parseToolCalls(thinkingContent), sourceContent: thinkingContent }
+}
+
 /** Hides complete and partially streamed tool-call markup from user-facing text. */
 export function hideStreamingToolCalls(content: string): string {
 	const sanitized = normalizeToolCallsWrapper(stripDsml(content))

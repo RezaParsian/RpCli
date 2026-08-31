@@ -7,6 +7,22 @@ export function stringArgument(arguments_: Record<string, unknown>, name: string
 	return value
 }
 
+export function positiveIntegerArgument(
+	arguments_: Record<string, unknown>,
+	name: string,
+	fallback?: number
+): number | undefined {
+	const value = arguments_[name]
+	if (value === undefined || value === '') return fallback
+
+	const number = typeof value === 'number' ? value : typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : NaN
+	if (!Number.isSafeInteger(number) || number < 1) {
+		throw new TypeError(`Argument "${name}" must be a positive integer.`)
+	}
+
+	return number
+}
+
 /** Undo a fully HTML-escaped payload (`&lt;html&gt;...`) so write_file gets real tags. */
 export function unescapeEscapedMarkup(value: string): string {
 	if (!/&lt;/i.test(value)) return value

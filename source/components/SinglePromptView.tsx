@@ -32,6 +32,7 @@ export default function SinglePromptView({ prompt, thinking, quiet, search, toke
 
 	useEffect(() => {
 		let streamedResponse = ''
+		let streamedThinkingResponse = ''
 		void (async () => {
 			try {
 				await getAIResponse({
@@ -49,7 +50,8 @@ export default function SinglePromptView({ prompt, thinking, quiet, search, toke
 					thinkingEnabled: thinking,
 					onChunk: (chunk) => {
 						if (chunk.type === 'thinking') {
-							setThinkingResponse((previous) => previous + chunk.content)
+							streamedThinkingResponse += chunk.content
+							setThinkingResponse(hideStreamingToolCalls(streamedThinkingResponse))
 						} else {
 							streamedResponse += chunk.content
 							setResponse(hideStreamingToolCalls(streamedResponse))
@@ -60,8 +62,8 @@ export default function SinglePromptView({ prompt, thinking, quiet, search, toke
 
 				deleteSession(token, fullResponse.sessionId)
 
-				setResponse(fullResponse.content ?? 'Ai Error!')
-				setThinkingResponse(fullResponse.thinkingContent ?? '')
+				setResponse(hideStreamingToolCalls(fullResponse.content ?? 'Ai Error!'))
+				setThinkingResponse(hideStreamingToolCalls(fullResponse.thinkingContent ?? ''))
 				setState('done')
 			} catch (err) {
 				if (isInvalidTokenError(err)) {

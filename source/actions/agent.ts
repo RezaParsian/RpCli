@@ -1,6 +1,12 @@
 import sendMessage, { beginGeneration, isGenerationStopped } from '../core/apiClient.js'
 import { SystemPrompt } from '../prompts/index.js'
-import { executeToolCalls, formatToolActivityMessage, parseToolCalls, type ToolCall, type ToolResult } from '../tools/index.js'
+import {
+	executeToolCalls,
+	formatToolActivityMessage,
+	parseResponseToolCalls,
+	type ToolCall,
+	type ToolResult,
+} from '../tools/index.js'
 import { type ChatResult, type ChatStreamChunk } from '../../core-lib/index.js'
 
 export type ChatMode = 'plan' | 'normal' | 'yolo'
@@ -83,9 +89,12 @@ export async function getAIResponse({
 		if (response.stopped || isGenerationStopped()) return response
 
 		let toolCalls: ToolCall[]
+		let toolCallContent: string
 
 		try {
-			toolCalls = parseToolCalls(response.content || '')
+			const parsed = parseResponseToolCalls(response.content || '', response.thinkingContent || '')
+			toolCalls = parsed.calls
+			toolCallContent = parsed.sourceContent
 		} catch (error) {
 			if (toolRounds >= MAX_TOOL_ROUNDS) {
 				onToolMessage?.(toolRoundLimitMessage())
@@ -111,7 +120,7 @@ export async function getAIResponse({
 		}
 
 		toolRounds += 1
-		onToolMessage?.(formatToolActivityMessage(response.content ?? '', toolCalls))
+		onToolMessage?.(formatToolActivityMessage(toolCallContent, toolCalls))
 
 		const results = await executeToolCalls(toolCalls, async (call) => (confirmTool ? confirmTool(call) : false), mode, signal)
 

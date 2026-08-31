@@ -1,5 +1,5 @@
 export type { ConfirmationHandler, ToolCall, ToolConfirmationDetails, ToolMode, ToolResult } from './types.js'
 export { describeToolActivity, describeToolConfirmation, formatToolActivityMessage } from './describe.js'
 export { executeTool, executeToolCalls, toolRequiresConfirmation } from './execute.js'
-export { hideStreamingToolCalls, parseToolCall, parseToolCalls } from './parse.js'
+export { hideStreamingToolCalls, parseResponseToolCalls, parseToolCall, parseToolCalls } from './parse.js'
 export { getToolDescriptions } from './registry.js'

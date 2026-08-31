@@ -4,7 +4,7 @@ import { exec as execCallback } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { promisify } from 'node:util'
 import listWorkspaceFiles from '../core/ListWorkspaceFiles.js'
-import { stringArgument, textArgument } from './arguments.js'
+import { positiveIntegerArgument, stringArgument, textArgument } from './arguments.js'
 import { rootDirectory, safePath, safeTargetPath } from './paths.js'
 import { commandContainsSudo, stripSudo } from './sudo.js'
 import { todoTools } from './todo.js'
@@ -132,14 +132,25 @@ export const tools: Tool[] = [
 	},
 	{
 		name: 'read_file',
-		description: 'read_file(path: string) - Reads a UTF-8 text file inside the current working directory (maximum 100 KiB).',
+		description:
+			'read_file(path: string, offset?: number, limit?: number) - Reads a UTF-8 text file inside the current working directory (maximum 100 KiB). offset is a 1-based line number; limit is the maximum number of lines returned.',
 		requiresConfirmation: false,
 		async execute(arguments_) {
 			const filePath = await safePath(stringArgument(arguments_, 'path'))
+			const offset = positiveIntegerArgument(arguments_, 'offset', 1) ?? 1
+			const limit = positiveIntegerArgument(arguments_, 'limit')
 			const stats = await fs.stat(filePath)
 			if (!stats.isFile()) throw new Error('The requested path is not a file.')
 			if (stats.size > 100 * 1024) throw new Error('The requested file is larger than 100 KiB.')
-			return fs.readFile(filePath, 'utf8')
+
+			const content = await fs.readFile(filePath, 'utf8')
+			if (offset === 1 && limit === undefined) return content
+
+			const start = offset - 1
+			return content
+				.split('\n')
+				.slice(start, limit === undefined ? undefined : start + limit)
+				.join('\n')
 		},
 	},
 	{

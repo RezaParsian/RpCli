@@ -590,9 +590,12 @@ export default function InteractiveChatView({
 								const messageKey = String(chunk.messageId ?? 'pending')
 								const id = `${streamId}-${messageKey}-thinking`
 								const previous = thinkingContent.get(messageKey) ?? ''
-								const content = previous + chunk.content
-								thinkingContent.set(messageKey, content)
-								stream.upsert({ id, role: 'thinking', content })
+								const rawContent = previous + chunk.content
+								thinkingContent.set(messageKey, rawContent)
+								const visibleContent = hideStreamingToolCalls(rawContent)
+								if (!visibleContent) return
+
+								stream.upsert({ id, role: 'thinking', content: visibleContent })
 								stream.scheduleFlush()
 							}
 						},
