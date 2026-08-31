@@ -112,8 +112,13 @@ function renderInline(tokens: AnyToken[], dim = false): React.ReactNode {
 		if (token.type === 'link') {
 			return (
 				<Text key={i} dimColor={dim}>
-					<Text color="cyan" dimColor={dim}>{token.text}</Text>
-					<Text color="gray" dimColor={dim}> ({token.href})</Text>
+					<Text color="cyan" dimColor={dim}>
+						{token.text}
+					</Text>
+					<Text color="gray" dimColor={dim}>
+						{' '}
+						({token.href})
+					</Text>
 				</Text>
 			)
 		}
@@ -122,7 +127,11 @@ function renderInline(tokens: AnyToken[], dim = false): React.ReactNode {
 			return <React.Fragment key={i}>{renderInline(token.tokens, dim)}</React.Fragment>
 		}
 
-		return <Text key={i} dimColor={dim}>{token.text ?? token.raw ?? ''}</Text>
+		return (
+			<Text key={i} dimColor={dim}>
+				{token.text ?? token.raw ?? ''}
+			</Text>
+		)
 	})
 }
 
@@ -217,7 +226,9 @@ function renderBlock(token: AnyToken, key: number, isThinking = false, dim = fal
 				<Text dimColor={dim}>{border('├', '┼', '┤')}</Text>
 
 				{rows.map((row, i) => (
-					<Text key={i} dimColor={dim}>{formatRow(row)}</Text>
+					<Text key={i} dimColor={dim}>
+						{formatRow(row)}
+					</Text>
 				))}
 
 				<Text dimColor={dim}>{border('└', '┴', '┘')}</Text>
@@ -237,7 +248,11 @@ function renderBlock(token: AnyToken, key: number, isThinking = false, dim = fal
 		return <Box key={key} marginBottom={1} />
 	}
 
-	return <Text key={key} dimColor={dim}>{token.raw ?? ''}</Text>
+	return (
+		<Text key={key} dimColor={dim}>
+			{token.raw ?? ''}
+		</Text>
+	)
 }
 
 type markdownTextProps = { text: string; isThinking?: boolean; dim?: boolean }

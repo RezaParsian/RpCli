@@ -12,12 +12,11 @@ type Props = {
 export default function ChatStatusBar({ mode, searchEnabled, thinkingEnabled, modelType }: Props) {
 	return (
 		<Box justifyContent="space-between" paddingX={1}>
-			<Text dimColor>Ready</Text>
+			<Text dimColor>Scroll: Ctrl+Home/Ctrl+End</Text>
 
 			<Box gap={2}>
 				<Text>
-					Mode:{' '}
-					<Text color={mode === 'yolo' ? 'red' : mode === 'normal' ? 'yellow' : 'green'}>{mode}</Text>
+					Mode: <Text color={mode === 'yolo' ? 'red' : mode === 'normal' ? 'yellow' : 'green'}>{mode}</Text>
 					{mode === 'plan' ? <Text dimColor> read-only</Text> : null} <Text dimColor>(TAB)</Text>
 				</Text>
 
@@ -44,8 +43,6 @@ export default function ChatStatusBar({ mode, searchEnabled, thinkingEnabled, mo
 					</Text>{' '}
 					<Text dimColor>(/thinking)</Text>
 				</Text>
-
-
 			</Box>
 		</Box>
 	)

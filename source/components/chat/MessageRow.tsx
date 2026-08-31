@@ -1,16 +1,10 @@
 import React from 'react'
-import {Box, Text} from 'ink'
+import { Box, Text } from 'ink'
 import MarkdownText from '../MarkdownText.js'
 import RpCliLogo from '../RpCliLogo.js'
-import type {ChatMessage} from './types.js'
+import type { ChatMessage } from './types.js'
 
-export const MessageRow = React.memo(function MessageRow({
-	msg,
-	version,
-}: {
-	msg: ChatMessage
-	version?: string
-}) {
+export const MessageRow = React.memo(function MessageRow({ msg, version }: { msg: ChatMessage; version?: string }) {
 	return (
 		<Box flexDirection="column" marginBottom={1}>
 			{msg.role === 'logo' && <RpCliLogo version={version} />}

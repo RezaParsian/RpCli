@@ -40,7 +40,7 @@ function formatTodoList(): string {
 	const total = todos.size
 	const progress = total > 0 ? Math.round((done / total) * 100) : 0
 
-	const statusIcon = (status: Status) => status === 'done' ? '✅' : status === 'in-progress' ? '🔄' : '⏳'
+	const statusIcon = (status: Status) => (status === 'done' ? '✅' : status === 'in-progress' ? '🔄' : '⏳')
 
 	let output = `📋 **Todo List** (${done}/${total} done, ${progress}% complete)\n\n`
 
@@ -107,7 +107,9 @@ export const todoTools = [
 				}
 			}
 
-			return formatTodoListWithMessage(`Added todo #${id}: "${description}"${parentId ? ` as subtask of #${parentId}` : ''}`)
+			return formatTodoListWithMessage(
+				`Added todo #${id}: "${description}"${parentId ? ` as subtask of #${parentId}` : ''}`
+			)
 		},
 	},
 	{
@@ -168,24 +170,32 @@ export const todoTools = [
 			let subtaskArray: string[] = []
 			if (typeof subtaskDescriptions === 'string') {
 				// Split by newline only (not comma) to avoid character-level splitting
-				subtaskArray = subtaskDescriptions.split('\n').map(s => s.trim()).filter(Boolean)
+				subtaskArray = subtaskDescriptions
+					.split('\n')
+					.map((s) => s.trim())
+					.filter(Boolean)
 				// If no newlines found but there are commas, treat as a single subtask
 				if (subtaskArray.length === 1 && subtaskArray[0]!.includes(',')) {
 					// Check if it's a list like "item1, item2, item3" without newlines
-					const commaSplit = subtaskArray[0]!.split(',').map(s => s.trim()).filter(Boolean)
+					const commaSplit = subtaskArray[0]!
+						.split(',')
+						.map((s) => s.trim())
+						.filter(Boolean)
 					if (commaSplit.length > 1) {
 						subtaskArray = commaSplit
 					}
 				}
 			} else if (Array.isArray(subtaskDescriptions)) {
-				subtaskArray = subtaskDescriptions.map(s => String(s).trim()).filter(Boolean)
+				subtaskArray = subtaskDescriptions.map((s) => String(s).trim()).filter(Boolean)
 			} else {
 				throw new Error('subtasks must be a string with newlines, or an array of strings')
 			}
 
 			// Validate: if a single subtask is longer than 200 chars, warn the model
 			if (subtaskArray.length === 1 && subtaskArray[0]!.length > 200) {
-				throw new Error('Subtasks should be a list of individual tasks (one per line or array item). Single long description detected.')
+				throw new Error(
+					'Subtasks should be a list of individual tasks (one per line or array item). Single long description detected.'
+				)
 			}
 
 			if (subtaskArray.length === 0) {
@@ -217,7 +227,9 @@ export const todoTools = [
 			todo.subtaskIds = subtaskIds
 			todo.status = 'pending'
 
-			return formatTodoListWithMessage(`Split todo #${id} into ${subtaskIds.length} subtasks: ${subtaskIds.map((sid) => `#${sid}`).join(', ')}`)
+			return formatTodoListWithMessage(
+				`Split todo #${id} into ${subtaskIds.length} subtasks: ${subtaskIds.map((sid) => `#${sid}`).join(', ')}`
+			)
 		},
 	},
 	{

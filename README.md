@@ -104,6 +104,8 @@ The system prompt is sent as soon as interactive mode opens. If the program clos
 
 Type `@` to mention a file or folder from the workspace. Type `/` to pick a slash command.
 
+Use Ctrl+Home to scroll to the top, Ctrl+End to scroll to the bottom. PageUp and PageDown scroll by pages.
+
 ### Execution modes
 
 Press **TAB** to cycle `normal` → `yolo` → `plan`. The status bar shows the current mode. (Some workflows also switch modes via the `/plan`, `/normal`, and `/yolo` slash commands below.)

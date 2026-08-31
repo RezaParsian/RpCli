@@ -170,15 +170,25 @@ export default function InteractiveChatView({
 	useInput((pressedInput, key) => {
 		if (!filePickerOpen && !commandPickerOpen && key.pageUp) {
 			followOutput.current = false
-			const height = scrollRef.current?.getViewportHeight() ?? 1
-			scrollRef.current?.scrollBy(-height)
+			scrollRef.current?.scrollBy(-1)
 			return
 		}
 
 		if (!filePickerOpen && !commandPickerOpen && key.pageDown) {
-			const height = scrollRef.current?.getViewportHeight() ?? 1
-			scrollRef.current?.scrollBy(height)
+			scrollRef.current?.scrollBy(1)
 			followOutput.current = (scrollRef.current?.getScrollOffset() ?? 0) >= (scrollRef.current?.getBottomOffset() ?? 0) - 1
+			return
+		}
+
+		if (!filePickerOpen && !commandPickerOpen && key.ctrl && key.home) {
+			followOutput.current = false
+			scrollRef.current?.scrollToTop()
+			return
+		}
+
+		if (!filePickerOpen && !commandPickerOpen && key.ctrl && key.end) {
+			scrollRef.current?.scrollToBottom()
+			followOutput.current = true
 			return
 		}
 

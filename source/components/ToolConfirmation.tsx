@@ -21,13 +21,13 @@ export function useToolConfirmation() {
 		})
 	}, [])
 
-	useInput((input) => {
+	useInput((input, key) => {
 		const request = pendingReference.current
-		if (!request || (input !== 'y' && input !== 'n')) return
+		if (!request || (!key.return && input !== 'y' && input !== 'n')) return
 
 		pendingReference.current = undefined
 		setPending(undefined)
-		request.resolve(input === 'y')
+		request.resolve(key.return || input === 'y')
 	})
 
 	return { pending, confirmTool }

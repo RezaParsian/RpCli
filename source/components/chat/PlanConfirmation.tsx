@@ -8,7 +8,7 @@ type Props = {
 export default function PlanConfirmation({ onDecide }: Props) {
 	useInput((input, key) => {
 		if (key.escape || input === 'n' || input === 'N') onDecide(false)
-		if (input === 'y' || input === 'Y') onDecide(true)
+		if (key.return || input === 'y' || input === 'Y') onDecide(true)
 	})
 
 	return (

@@ -25,10 +25,7 @@ async function readConfigEntries(): Promise<Map<string, string>> {
 			const key = trimmed.slice(0, separator)
 			let value = trimmed.slice(separator + 1)
 
-			if (
-				(value.startsWith('"') && value.endsWith('"')) ||
-				(value.startsWith("'") && value.endsWith("'"))
-			) {
+			if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
 				try {
 					value = JSON.parse(value) as string
 				} catch {
