@@ -2,6 +2,7 @@ import React from 'react'
 import { Box, Text } from 'ink'
 import { marked } from 'marked'
 import SyntaxHighlight from 'ink-syntax-highlight'
+import { toTerminalText } from '../core/bidiText.js'
 
 type TableCell = {
 	text?: string
@@ -23,6 +24,27 @@ type AnyToken = {
 	// Tables
 	header?: TableCell[]
 	rows?: TableRow[]
+}
+
+function terminalToken(token: AnyToken): AnyToken {
+	if (token.type === 'code') return token
+
+	return {
+		...token,
+		text: token.text === undefined ? undefined : toTerminalText(token.text),
+		tokens: token.tokens?.map(terminalToken),
+		items: token.items?.map(terminalToken),
+		header: token.header?.map(terminalCell),
+		rows: token.rows?.map((row) => row.map(terminalCell)),
+	}
+}
+
+function terminalCell(cell: TableCell): TableCell {
+	return {
+		...cell,
+		text: cell.text === undefined ? undefined : toTerminalText(cell.text),
+		tokens: cell.tokens?.map(terminalToken),
+	}
 }
 
 const supportedLanguages = new Set([
@@ -257,7 +279,7 @@ function renderBlock(token: AnyToken, key: number, isThinking = false, dim = fal
 
 type markdownTextProps = { text: string; isThinking?: boolean; dim?: boolean }
 export default function MarkdownText({ text, isThinking = false, dim = false }: markdownTextProps) {
-	const tokens = marked.lexer(text) as unknown as AnyToken[]
+	const tokens = (marked.lexer(text) as unknown as AnyToken[]).map(terminalToken)
 
 	return <Box flexDirection="column">{tokens.map((token, i) => renderBlock(token, i, isThinking, dim))}</Box>
 }

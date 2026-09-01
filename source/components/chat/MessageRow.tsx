@@ -3,6 +3,7 @@ import { Box, Text } from 'ink'
 import MarkdownText from '../MarkdownText.js'
 import RpCliLogo from '../RpCliLogo.js'
 import type { ChatMessage } from './types.js'
+import { toTerminalText } from '../../core/bidiText.js'
 
 export const MessageRow = React.memo(function MessageRow({ msg, version }: { msg: ChatMessage; version?: string }) {
 	return (
@@ -13,7 +14,7 @@ export const MessageRow = React.memo(function MessageRow({ msg, version }: { msg
 				<Box>
 					<Text color="magenta" bold>
 						{'> '}
-						{msg.content}
+						{toTerminalText(msg.content)}
 					</Text>
 				</Box>
 			)}
@@ -35,7 +36,7 @@ export const MessageRow = React.memo(function MessageRow({ msg, version }: { msg
 					</Text>
 
 					<Text color="gray" dimColor italic>
-						{msg.content}
+						{toTerminalText(msg.content)}
 					</Text>
 				</Box>
 			)}
