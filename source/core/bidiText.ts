@@ -7,10 +7,14 @@ export function containsRightToLeftText(value: string): boolean {
 	return rightToLeftCharacter.test(value)
 }
 
+export function terminalSupportsBidirectionalText(environment: NodeJS.ProcessEnv = process.env): boolean {
+	return Boolean(environment['VTE_VERSION'] || environment['KONSOLE_VERSION'])
+}
+
 // Keep stored/API text in logical order. Only terminal-facing strings are
 // reordered because most terminal emulators do not implement Unicode BiDi.
 export function toTerminalText(value: string): string {
-	if (!containsRightToLeftText(value)) return value
+	if (!containsRightToLeftText(value) || terminalSupportsBidirectionalText()) return value
 
 	return value
 		.split('\n')

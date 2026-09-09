@@ -1,5 +1,5 @@
 import test from 'ava'
-import { containsRightToLeftText, toTerminalText } from './bidiText.js'
+import { containsRightToLeftText, terminalSupportsBidirectionalText, toTerminalText } from './bidiText.js'
 
 test('leaves left-to-right text unchanged', (t) => {
 	t.is(toTerminalText('Hello, TypeScript!'), 'Hello, TypeScript!')
@@ -16,4 +16,10 @@ test('keeps separate lines independent', (t) => {
 test('detects Persian text', (t) => {
 	t.true(containsRightToLeftText('متن فارسی'))
 	t.false(containsRightToLeftText('plain text'))
+})
+
+test('detects terminals with native bidirectional text support', (t) => {
+	t.true(terminalSupportsBidirectionalText({ VTE_VERSION: '7600' }))
+	t.true(terminalSupportsBidirectionalText({ KONSOLE_VERSION: '240800' }))
+	t.false(terminalSupportsBidirectionalText({ TERM_PROGRAM: 'ghostty' }))
 })
