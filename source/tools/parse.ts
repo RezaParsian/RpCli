@@ -1,12 +1,16 @@
 import type { ToolCall } from './types.js'
 
-function stripDsml(content: string): string {
-	return content.replace(/<([/]?)｜+DSML｜+(?=tool_calls|invoke|parameter)/g, '<$1')
-}
-
-function normalizeToolCallsWrapper(content: string): string {
-	// Normalize any closing tag ending in "_calls" to the expected wrapper.
-	return content.replace(/<\/[^>]*calls[^>]*>/g, '</' + 'tool_calls>')
+function normalizeToolCallMarkup(content: string): string {
+	return content
+		// DeepSeek may serialize our XML-like tool tags using its DSML marker.
+		// Accept both opening and closing forms, with optional whitespace after the marker.
+		.replace(/<([/]?)｜+DSML｜+\s*(calls|tool_calls|invoke|parameter)\b/g, (_match, slash: string, tag: string) => {
+			const normalizedTag = tag === 'calls' ? 'tool_calls' : tag
+			return `<${slash}${normalizedTag}`
+		})
+		// Be tolerant of non-DSML wrappers named "calls" as well.
+		.replace(/<calls>/g, '<tool_calls>')
+		.replace(/<\/calls>/g, '</tool_calls>')
 }
 
 function normalizeParamValue(value: string): string {
@@ -70,7 +74,7 @@ export function parseToolCall(content: string): ToolCall | undefined {
  */
 export function parseToolCalls(content: string): ToolCall[] {
 	const calls: ToolCall[] = []
-	const sanitized = normalizeToolCallsWrapper(stripDsml(content))
+	const sanitized = normalizeToolCallMarkup(content)
 	const wrapperPattern = /<tool_calls>\s*([\s\S]*?)\s*<\/tool_calls>/g
 	const callPattern = /<invoke\s+name="([^"]+)">\s*([\s\S]*?)\s*<\/invoke>/g
 	let wrapperMatch: RegExpExecArray | null
@@ -117,7 +121,7 @@ export function parseResponseToolCalls(content: string, thinkingContent: string)
 
 /** Hides complete and partially streamed tool-call markup from user-facing text. */
 export function hideStreamingToolCalls(content: string): string {
-	const sanitized = normalizeToolCallsWrapper(stripDsml(content))
+	const sanitized = normalizeToolCallMarkup(content)
 	const marker = '<tool_calls'
 	let visible = sanitized.replace(/<tool_calls>[\s\S]*?<\/tool_calls>/g, '')
 	const incompleteCall = visible.indexOf(marker)

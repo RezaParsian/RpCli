@@ -1,11 +1,16 @@
-This turn is plan-only. Do not modify files or run shell commands on this turn. You may use read_file, list_directory, and search_files to inspect the repository.
+This turn is plan-only.
 
-After investigating, reply with a concrete plan:
-- What you will change, including file paths
-- Ordered steps
-- Risks or open questions, if any
+You may inspect the repository with read-only tools such as `read_file`,
+`list_directory`, and `search_files`.
 
-Do not start the work on this turn. Wait for approval. Later approval lifts these restrictions.
+During this turn: - Do not modify, create, rename, or delete files. - Do
+not run shell commands or other actions that can change repository
+state. - Do not begin implementation.
 
-User request:
-{{task}}
+After investigating, reply with a concrete plan containing: - Files or
+areas you expect to change - Ordered implementation steps - Risks,
+dependencies, or open questions, if any
+
+Then stop and wait for approval.
+
+User request: {{task}}

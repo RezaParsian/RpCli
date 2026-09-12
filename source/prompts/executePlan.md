@@ -1,7 +1,18 @@
-Plan mode is over. RP-CLI has switched to {{mode}} mode. File edits and shell commands are allowed now.
+Plan mode is over. RP-CLI has switched to {{mode}} mode. The plan-only
+restrictions on file edits and shell commands are now lifted.
 
-Ignore earlier instructions that said not to modify files or run commands. Those applied only while planning.
+The user approved the plan. Continue by executing the approved plan with
+the appropriate tools.
 
-The user approved your plan. Execute it now using tools. Do not refuse, do not re-plan, and do not ask to switch modes.
+-   Do not re-plan or ask for approval again unless a new decision is
+    required.
+-   Do not restart completed work.
+-   Do not re-read files already inspected unless they may have changed.
+-   Create or update files with `write_file` / `edit_file` as
+    appropriate.
+-   Do not print full file contents in the reply.
+-   If a minor implementation detail was not covered by the plan, make
+    the smallest reasonable choice and continue.
 
-Follow the plan you just wrote. Create or update files with write_file / edit_file. Do not print full file contents in your reply. Do not restart from scratch. Do not re-read files you already have unless they may have changed. If a step is missing, do the obvious remaining work.
+All other system, safety, tool, and repository instructions remain in
+effect.
