@@ -1,18 +1,5 @@
 import type { ToolCall } from './types.js'
 
-function normalizeToolCallMarkup(content: string): string {
-	return content
-		// DeepSeek may serialize our XML-like tool tags using its DSML marker.
-		// Accept both opening and closing forms, with optional whitespace after the marker.
-		.replace(/<([/]?)｜+DSML｜+\s*(calls|tool_calls|invoke|parameter)\b/g, (_match, slash: string, tag: string) => {
-			const normalizedTag = tag === 'calls' ? 'tool_calls' : tag
-			return `<${slash}${normalizedTag}`
-		})
-		// Be tolerant of non-DSML wrappers named "calls" as well.
-		.replace(/<calls>/g, '<tool_calls>')
-		.replace(/<\/calls>/g, '</tool_calls>')
-}
-
 function normalizeParamValue(value: string): string {
 	const openingNewline = /^(\r?\n)/.exec(value)?.[1]
 	if (!openingNewline) return value
@@ -23,9 +10,6 @@ function normalizeParamValue(value: string): string {
 	if (closingWrapper) {
 		result = result.slice(0, -(closingWrapper[0]?.length ?? 0))
 
-		// Tool calls indent <parameter> one level and their multiline value one
-		// additional level. Remove those two wrapper levels from the first
-		// content line only; indentation belonging to the value remains intact.
 		const tagIndent = closingWrapper[1] ?? ''
 		const contentWrapperIndent = tagIndent + tagIndent
 		if (contentWrapperIndent && result.startsWith(contentWrapperIndent)) {
@@ -74,13 +58,12 @@ export function parseToolCall(content: string): ToolCall | undefined {
  */
 export function parseToolCalls(content: string): ToolCall[] {
 	const calls: ToolCall[] = []
-	const sanitized = normalizeToolCallMarkup(content)
 	const wrapperPattern = /<tool_calls>\s*([\s\S]*?)\s*<\/tool_calls>/g
 	const callPattern = /<invoke\s+name="([^"]+)">\s*([\s\S]*?)\s*<\/invoke>/g
 	let wrapperMatch: RegExpExecArray | null
 	let callMatch: RegExpExecArray | null
 
-	while ((wrapperMatch = wrapperPattern.exec(sanitized)) !== null) {
+	while ((wrapperMatch = wrapperPattern.exec(content)) !== null) {
 		const wrapperBody = wrapperMatch[1] ?? ''
 		callPattern.lastIndex = 0
 
@@ -103,7 +86,7 @@ export function parseToolCalls(content: string): ToolCall[] {
 		}
 	}
 
-	if (sanitized.replace(wrapperPattern, '').includes('<tool_calls')) {
+	if (content.replace(wrapperPattern, '').includes('<tool_calls')) {
 		throw new TypeError('Invalid tool calls block. Expected a closing </tool_calls> tag.')
 	}
 
@@ -121,9 +104,8 @@ export function parseResponseToolCalls(content: string, thinkingContent: string)
 
 /** Hides complete and partially streamed tool-call markup from user-facing text. */
 export function hideStreamingToolCalls(content: string): string {
-	const sanitized = normalizeToolCallMarkup(content)
 	const marker = '<tool_calls'
-	let visible = sanitized.replace(/<tool_calls>[\s\S]*?<\/tool_calls>/g, '')
+	let visible = content.replace(/<tool_calls>[\s\S]*?<\/tool_calls>/g, '')
 	const incompleteCall = visible.indexOf(marker)
 	if (incompleteCall !== -1) visible = visible.slice(0, incompleteCall)
 

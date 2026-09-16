@@ -10,6 +10,7 @@ import {
 	type ChatStreamChunk,
 } from '../../core-lib/index.js'
 import logChat, { isChatLoggingEnabled } from './LogChat.js'
+import { createToolCallMarkupNormalizer, normalizeToolCallMarkup } from './toolCallMarkup.js'
 
 let sessionId = process.env['DEEPSEEK_SESSION_ID']
 let parentMessageId: number | null = process.env['DEEPSEEK_MESSAGE_ID'] ? Number(process.env['DEEPSEEK_MESSAGE_ID']) : null
@@ -128,6 +129,8 @@ export default async function sendMessage({
 		}
 	}
 
+	const responseNormalizer = createToolCallMarkupNormalizer()
+	const thinkingNormalizer = createToolCallMarkupNormalizer()
 	const res = await chat({
 		token,
 		challenge,
@@ -143,14 +146,27 @@ export default async function sendMessage({
 				lastStreamMessageId = chunk.messageId
 			}
 
-			onChunk?.(chunk)
+			const normalizer = chunk.type === 'thinking' ? thinkingNormalizer : responseNormalizer
+			const content = normalizer(chunk.content)
+			if (content) onChunk?.({ ...chunk, content })
 		},
 		logFn: isChatLoggingEnabled() ? logChat : undefined,
 	})
 
+	for (const [type, normalizer] of [
+		['response', responseNormalizer],
+		['thinking', thinkingNormalizer],
+	] as const) {
+		const content = normalizer('', true)
+		if (content) onChunk?.({ type, content, messageId: res.messageId ?? null })
+	}
+
 	if (!res.ok) {
 		throw new Error(res.error)
 	} else {
+		res.content = normalizeToolCallMarkup(res.content ?? '')
+		res.thinkingContent = normalizeToolCallMarkup(res.thinkingContent ?? '')
+
 		parentMessageId = res.messageId || parentMessageId
 
 		if (res.stopped) {
