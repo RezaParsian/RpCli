@@ -1,6 +1,6 @@
 {
 	"name": "@rezaparsian/rp-cli",
-	"version": "0.11.0",
+	"version": "0.12.0",
 	"description": "AI-powered coding CLI — interactive chat with local tools, plan/yolo modes, single prompts, and git commit messages",
 	"license": "MIT",
 	"author": {
@@ -60,13 +60,15 @@
 		"marked": "^18.0.3",
 		"meow": "^14.1.0",
 		"react": "^19.2.5",
-		"react-ink-textarea": "^0.3.0"
+		"react-ink-textarea": "^0.3.0",
+		"semver": "^7.8.6"
 	},
 	"devDependencies": {
 		"@sindresorhus/tsconfig": "^3.0.1",
 		"@types/express": "^5.0.6",
 		"@types/node": "^25.9.3",
 		"@types/react": "^18.0.32",
+		"@types/semver": "^7.8.0",
 		"@vdemedes/prettier-config": "^2.0.1",
 		"ava": "^5.2.0",
 		"eslint-config-xo-react": "^0.27.0",

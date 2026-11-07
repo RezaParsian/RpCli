@@ -9,7 +9,7 @@ export type SubmitOptions = {
 
 export type ChatMessage = {
 	id: string
-	role: 'logo' | 'user' | 'thinking' | 'assistant' | 'console'
+	role: 'logo' | 'update' | 'user' | 'thinking' | 'assistant' | 'console'
 	content: string
 }
 

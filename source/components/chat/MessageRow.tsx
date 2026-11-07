@@ -4,11 +4,14 @@ import MarkdownText from '../MarkdownText.js'
 import RpCliLogo from '../RpCliLogo.js'
 import type { ChatMessage } from './types.js'
 import { toTerminalText } from '../../core/bidiText.js'
+import UpdateNotice from '../UpdateNotice.js'
 
 export const MessageRow = React.memo(function MessageRow({ msg, version }: { msg: ChatMessage; version?: string }) {
 	return (
 		<Box flexDirection="column" marginBottom={1}>
 			{msg.role === 'logo' && <RpCliLogo version={version} />}
+
+			{msg.role === 'update' && <UpdateNotice message={msg.content} />}
 
 			{msg.role === 'user' && (
 				<Box>

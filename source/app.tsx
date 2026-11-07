@@ -4,6 +4,7 @@ import CommitView from './components/CommitView.js'
 import SinglePromptView from './components/SinglePromptView.js'
 import InteractiveChatView from './components/InteractiveChatView.js'
 import TokenSetupView from './components/TokenSetupView.js'
+import UpdateNotice from './components/UpdateNotice.js'
 import { clearDeepSeekToken } from './core/TokenConfig.js'
 
 type Mode = 'interactive' | 'prompt' | 'commit'
@@ -17,6 +18,7 @@ type Props = {
 	quiet: boolean
 	search: boolean
 	version?: string
+	updateMessage?: string
 }
 
 function Header() {
@@ -29,7 +31,17 @@ function Header() {
 	)
 }
 
-export default function App({ mode, commitAll, prompt, resumeSessionId, thinking, quiet, search, version }: Props) {
+export default function App({
+	mode,
+	commitAll,
+	prompt,
+	resumeSessionId,
+	thinking,
+	quiet,
+	search,
+	version,
+	updateMessage,
+}: Props) {
 	const { exit } = useApp()
 	const exiting = useRef(false)
 	const beforeExit = useRef<(() => Promise<void>) | undefined>(undefined)
@@ -80,6 +92,7 @@ export default function App({ mode, commitAll, prompt, resumeSessionId, thinking
 			<Box flexDirection="column" marginX={1} marginY={1}>
 				<Header />
 				<TokenSetupView onTokenSaved={setToken} />
+				<UpdateNotice message={updateMessage} />
 			</Box>
 		)
 	}
@@ -89,6 +102,7 @@ export default function App({ mode, commitAll, prompt, resumeSessionId, thinking
 			<Box flexDirection="column" marginX={1} marginY={1}>
 				<Header />
 				<CommitView useAll={commitAll} token={token} onInvalidToken={handleInvalidToken} />
+				<UpdateNotice message={updateMessage} />
 			</Box>
 		)
 	}
@@ -97,6 +111,7 @@ export default function App({ mode, commitAll, prompt, resumeSessionId, thinking
 		return (
 			<Box flexDirection="column" marginX={1} marginY={1}>
 				<Header />
+				<UpdateNotice message={updateMessage} />
 				<SinglePromptView
 					prompt={prompt}
 					thinking={thinking}
@@ -112,6 +127,7 @@ export default function App({ mode, commitAll, prompt, resumeSessionId, thinking
 	return (
 		<InteractiveChatView
 			version={version}
+			updateMessage={updateMessage}
 			token={token}
 			resumeSessionId={resumeSessionId}
 			onInvalidToken={handleInvalidToken}

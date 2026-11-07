@@ -33,6 +33,7 @@ import { loadSessionTranscript, saveSessionTranscript } from '../core/SessionTra
 
 type Props = {
 	version?: string
+	updateMessage?: string
 	token: string
 	resumeSessionId?: string
 	onInvalidToken: () => void
@@ -42,6 +43,7 @@ type Props = {
 
 export default function InteractiveChatView({
 	version,
+	updateMessage,
 	token,
 	resumeSessionId,
 	onInvalidToken,
@@ -54,6 +56,11 @@ export default function InteractiveChatView({
 			role: 'logo',
 			content: '',
 		},
+		{
+			id:'update',
+			role:'update',
+			content: updateMessage ?? ''
+		}
 	])
 
 	const [streamingMessages, setStreamingMessages] = useState<ChatMessage[]>([])

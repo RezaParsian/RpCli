@@ -23,6 +23,11 @@ pnpm add -g @rezaparsian/rp-cli
 
 On first run, RP-CLI asks for a DeepSeek token and stores it in `~/.config/rp-cli/.env`.
 
+RP-CLI checks npm for a newer version on each run and immediately prints an update
+notice inside the Ink interface with `npm install --global @rezaparsian/rp-cli@latest` when one is available.
+The check times out after three seconds if npm is unreachable. Checks are skipped for
+`rc serve`, `--help`, and `--version`. Set `NO_UPDATE_NOTIFIER=1` to disable them.
+
 ## Usage
 
 ```
