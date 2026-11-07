@@ -54,7 +54,7 @@ export async function executeToolCalls(
 ): Promise<ToolResult[]> {
 	if (signal?.aborted) return []
 
-	// Models batch independent reads in one <tool_calls> block. Run those calls
+	// Models batch independent reads in fenced tool_call blocks. Run those calls
 	// concurrently so several repository searches do not repeatedly scan the
 	// workspace one after another. Promise.all preserves the model's call order.
 	if (calls.every((call) => !toolIsMutating(call))) {

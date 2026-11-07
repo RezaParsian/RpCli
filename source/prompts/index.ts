@@ -22,26 +22,17 @@ export function SystemPrompt(): string {
 		.map((description, index) => `${index + 1}. ${description}`)
 		.join('\n')
 
-	const elevationHint =
-		process.platform === 'win32'
-			? 'If administrator rights are needed, include the word `sudo` in the command (for example `sudo netstat -ab`). RP-CLI does not run a sudo binary on Windows; it strips `sudo` and opens a UAC dialog instead.'
-			: 'If administrator rights are needed, include `sudo` in the command (anywhere, not only at the start). RP-CLI strips `sudo` and opens an OS authorization dialog. There is no separate elevated tool.'
+	const toolsPrompt = loadPrompt('tools.md').replace('{{toolsList}}', () => toolsList)
 
-	const toolsPrompt = loadPrompt('tools.md').replace('{{toolsList}}', toolsList).replace('{{elevationHint}}', elevationHint)
+	const platformNames: Partial<Record<NodeJS.Platform, string>> = { win32: 'Windows', linux: 'Linux', darwin: 'macOS' }
+	const platform = platformNames[process.platform] ?? process.platform
+	const shell = process.platform === 'win32' ? process.env['ComSpec'] || 'cmd.exe' : '/bin/sh'
 
-	const agentPrompt = readAgentsMarkdown()
-
-	let systemPrompt = loadPrompt('system.md')
-		.replace('{{platform}}', process.platform)
-		.replace('{{cwd}}', process.cwd())
-		.replace('{{tools}}', toolsPrompt)
-
-	if (agentPrompt !== '')
-		systemPrompt +=
-			"\n\n---\n\n# Project-Specific Context (from this repository's AGENTS.md — treat as ground truth for this project)\n\n" +
-			agentPrompt
-
-	return systemPrompt
+	return loadPrompt('system.md')
+		.replace('{{platform}}', () => platform)
+		.replace('{{shell}}', () => shell)
+		.replace('{{cwd}}', () => process.cwd())
+		.replace('{{tools}}', () => toolsPrompt)
 }
 
 export function ServerSystemPrompt(): string {

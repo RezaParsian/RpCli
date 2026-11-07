@@ -26,7 +26,6 @@ export type SendMessageOptions = {
 	prompt: string
 	thinkingEnabled?: boolean
 	searchEnabled?: boolean
-	modelType?: 'default' | 'expert'
 	onChunk?: (chunk: ChatStreamChunk) => void
 	emptyResponseRetryCount?: number
 }
@@ -79,7 +78,6 @@ export default async function sendMessage({
 	prompt,
 	thinkingEnabled = true,
 	searchEnabled = false,
-	modelType = 'default',
 	onChunk,
 	emptyResponseRetryCount = 0,
 }: SendMessageOptions): Promise<ChatResult> {
@@ -137,7 +135,7 @@ export default async function sendMessage({
 		sessionId,
 		parentMessageId,
 		prompt,
-		model_type: modelType,
+		model_type: 'default',
 		thinking_enabled: thinkingEnabled,
 		search_enabled: searchEnabled,
 		signal: generationAbort?.signal,
@@ -162,7 +160,9 @@ export default async function sendMessage({
 	}
 
 	if (!res.ok) {
-		throw new Error(res.error)
+		throw new Error(
+			res.error?.includes('服务器繁忙') ? 'DeepSeek is busy. Please wait a moment and send your message again.' : res.error
+		)
 	} else {
 		res.content = normalizeToolCallMarkup(res.content ?? '')
 		res.thinkingContent = normalizeToolCallMarkup(res.thinkingContent ?? '')

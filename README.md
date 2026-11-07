@@ -5,11 +5,11 @@ AI-powered coding CLI (`rc`) — interactive chat with local tools, plan/yolo mo
 ## Features
 
 - 🤖 **Interactive chat** – natural language coding assistant with tool access
-- 🔧 **Built-in tools** – file read/write/edit, shell commands, search, todos
-- 📋 **Todo management** – track progress with `todo_add`, `todo_split`, `todo_update`, `todo_list`, `todo_clear` *(see note under Interactive Chat)*
+- 🔧 **Built-in tools** – file read/write/edit/delete, shell commands, search
+- 📎 **File references** – attach local file contents with `@path` before sending a request
+- 💬 **Session resume** – reopen a conversation with `rc resume <session-id>`
 - 🧠 **Plan mode** – read-only exploration before implementing changes
-- 🔄 **Model switching** – switch between default and Expert models while carrying conversation context into a fresh session
-- ⚡ **YOLO mode** – execute tools without confirmation
+- ⚡ **YOLO mode** – execute ordinary tools without confirmation; elevated commands still require approval
 - 📝 **Commit message generation** – generate conventional commit messages from staged or all changes
 - 🌐 **HTTP server** – serve an OpenAI-compatible API with `rc serve`
 
@@ -36,13 +36,13 @@ rc -c                         Generate a commit message from staged changes
 rc -c -a                      Generate a commit message from all changes (HEAD)
 rc serve                      Start an OpenAI-compatible HTTP API
 rc serve --port 8080          Listen on a custom port
-rc --plan "your question"     Plan mode (read-only) for a single prompt
+rc resume <session-id>        Resume a previous conversation
 ```
 
 ### Options
 
 | Option                   | Description                                            |
-|--------------------------|--------------------------------------------------------|
+| ------------------------ | ------------------------------------------------------ |
 | `-t`, `--thinking`       | Enable thinking for a single prompt.                   |
 | `-q`, `--quiet`          | Hide thinking output. Combine with `-t` as `-tq`.      |
 | `-s`, `--search`         | Enable web search for a single prompt.                 |
@@ -66,11 +66,13 @@ rc serve
 rc serve --port 8080 --host 127.0.0.1
 ```
 
-| Endpoint                               | Description                           |
-|----------------------------------------|---------------------------------------|
-| `POST /v1/chat/completions`            | Continue the current conversation.    |
-| `POST /v1/chat/completions/:sessionId` | Continue a specific DeepSeek session. |
-| `GET /health`                          | Liveness check.                       |
+| Endpoint                               | Description                             |
+| -------------------------------------- | --------------------------------------- |
+| `POST /v1/chat/completions`            | Continue the current conversation.      |
+| `POST /v1/chat/completions/:sessionId` | Continue a specific DeepSeek session.   |
+| `GET /v1/models`                       | List the advertised model (`deepseek`). |
+| `GET /v1/models/deepseek`              | Get the advertised model details.       |
+| `GET /health`                          | Liveness check.                         |
 
 Models: `deepseek-chat` (default) and `deepseek-reasoner` (thinking / `reasoning_content`). Requests use the token from `~/.config/rp-cli/.env`, or `Authorization: Bearer <token>` if no config token is set.
 
@@ -108,10 +110,10 @@ Use Ctrl+Home to scroll to the top, Ctrl+End to scroll to the bottom. PageUp and
 
 ### Execution modes
 
-Press **TAB** to cycle `normal` → `yolo` → `plan`. The status bar shows the current mode. (Some workflows also switch modes via the `/plan`, `/normal`, and `/yolo` slash commands below.)
+Press **TAB** to cycle `normal` → `yolo` → `plan` in interactive chat. The status bar shows the current mode.
 
 | Mode     | Behavior                                                                                                                                                       |
-|----------|----------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `normal` | Mutating tools (`write_file`, `edit_file`, `delete_file`, `run_command`) ask for **y/n** first.                                                                |
 | `yolo`   | Mutating tools run without confirmation, except elevated/`sudo` commands, which always ask.                                                                    |
 | `plan`   | Read-only. The model may inspect the repo, then you get **Start this plan?** **y** leaves plan, restores the previous mode, and executes. **n** stays in plan. |
@@ -119,45 +121,34 @@ Press **TAB** to cycle `normal` → `yolo` → `plan`. The status bar shows the 
 ### Slash commands
 
 | Command             | Description                                              |
-|---------------------|----------------------------------------------------------|
+| ------------------- | -------------------------------------------------------- |
 | `/init`             | Generate or update `AGENTS.md` for this repository.      |
 | `/continue`         | Keep going after the 10-round tool limit.                |
-| `/clear`            | Start a new conversation (clears todos too).             |
+| `/clear`            | Start a new conversation.                                |
 | `/help`             | List commands.                                           |
 | `/search`           | Toggle web search.                                       |
-| `/model`            | Switch between the default and Expert models. The current conversation is summarized and carried into the new session. |
 | `/thinking`         | Toggle thinking (on by default in chat).                 |
 | `/logging` (`/log`) | Toggle saving transcripts under `~/.config/rp-cli/logs`. |
-| `/todos`            | Show current todo list.                                  |
-| `/plan`             | Switch to plan mode.                                     |
-| `/normal`           | Switch to normal mode.                                   |
-| `/yolo`             | Switch to YOLO mode.                                     |
 | `/exit` (`/quit`)   | Close the application.                                   |
 
-Thinking and final responses are shown as separate messages. Web search and chat logging are off by default.
+The CLI uses the default DeepSeek model. Thinking and final responses stream separately; `/thinking` toggles thinking without switching models. Web search and chat logging are off by default.
 
 The input supports forward Delete, Ctrl+Backspace and Ctrl+Delete for word deletion, and Ctrl+Left/Right for word navigation. Alt+Backspace and Alt+Delete are disabled. Ctrl+J inserts a newline.
 
-### Todo tools
+### File references
 
-For multistep tasks, the agent can track progress with a built-in todo system:
+Mention a file with `@path/to/file` (or `@"path with spaces.txt"`). Its UTF-8
+contents are read locally and attached to the same user request, in both interactive
+chat and single-prompt mode, without waiting for a model-issued `read_file` call.
+Repeated references within a message are attached once. Files must
+be inside the working directory and no larger than 100 KiB. Directory references
+attach their immediate entries. Unreadable references report an error before the
+user request is sent.
 
-1. **Create a main task** with `todo_add`
-2. **Split it into subtasks** with `todo_split` (subtasks provided as a list, one per line)
-3. **Mark progress** with `todo_update` as each subtask completes
-4. **Show the full list** after every operation, or on demand with `/todos`
-
-**Example workflow:**
-
+```bash
+rc "Explain @source/cli.tsx"
+rc 'Review @"docs/design notes.md"'
 ```
-User: "Build a REST API with Express and TypeScript"
-
-Agent: *Creates todo #1 with 8 subtasks*
-Agent: *Works through each subtask, updating status as it goes*
-Agent: *Shows progress after each step*
-```
-
-> Note: this todo system is documented in one version of the project's README but not the other — confirm it's still present before relying on it.
 
 ## Single prompt
 
@@ -188,28 +179,42 @@ RP-CLI tells the model about local tools and executes tool calls returned by the
 
 When the user asks for a file, the model is instructed to write it with `write_file` rather than paste the contents into the chat.
 
-For each tool call, RP-CLI keeps the assistant's explanatory text in the chat and replaces the raw `<tool_calls>` markup with a human-readable activity message. The assistant can chain tool calls; after 10 rounds it stops and you can type `/continue`.
+For each tool call, RP-CLI keeps the assistant's explanatory text in the chat and replaces the raw `tool_call` blocks with a human-readable activity message. The assistant can chain tool calls; after 10 rounds it stops and you can type `/continue`.
 
-All paths are restricted to the directory where RP-CLI was started. To add another tool, register it in `source/tools/registry.ts`; the system prompt is generated from the same registry. Tool calls use this protocol:
+File tools and `@` references are restricted to the directory where RP-CLI was started.
+Shell commands start in that directory. The prompt includes the detected operating
+system (Windows, Linux, or macOS), execution shell, and working directory.
 
-```xml
-<tool_calls>
-  <invoke name="read_file">
-    <parameter name="path">package.json</parameter>
-  </invoke>
-</tool_calls>
+To add a tool, register it in `source/tools/registry.ts`; the tool list in the prompt
+is generated from that registry. Local tool calls use a Markdown fence with a tool
+name and a JSON input object:
+
+````text
+```tool_call
+name: read_file
+input: {"path":"package.json"}
 ```
+````
 
-Write literal `<` and `>` inside parameter values. Do not convert them to `&lt;` or `&gt;`. The only sequences that must not appear unescaped in a value are `</parameter>`, `</invoke>`, and `</tool_calls>`.
+Use valid JSON, with double-quoted keys and strings. Encode newlines as `\n`,
+quotes as `\"`, and backslashes as `\\`. Use `{}` for an empty input object.
+The application executes the call and sends a `tool_result` block containing JSON
+with `tool_name`, `ok`, and `result` or `error`. These local tool blocks are separate
+from client-defined function tools in the HTTP API.
 
 ## Configuration
 
 The CLI stores configuration in `~/.config/rp-cli/`:
 
-- `.env` – API keys and preferences (including logging and model selection)
+- `.env` – DeepSeek token (`DEEPSEEK_TOKEN`) and logging preference (`RP_CLI_LOG_CHAT`)
+- `sessions/` – saved interactive transcripts used by `rc resume <session-id>`
+- `logs/` – request prompts, stream events, and parsed results when logging is enabled
 
-The selected model is stored as `RP_CLI_MODEL=default` or `RP_CLI_MODEL=expert`.
-- `logs/` – chat transcripts (if logging is enabled)
+## Troubleshooting
+
+If DeepSeek reports that the server is busy, wait briefly and send the message again.
+A failed session initialization can be retried on the next send. Use `/logging` to
+capture request and response details when investigating a problem.
 
 ## Development
 

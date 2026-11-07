@@ -1,66 +1,69 @@
 import ava, { type TestFn } from 'ava'
 import { executeTool } from '../source/tools/execute.js'
+import { formatToolActivityMessage } from '../source/tools/describe.js'
 import { hideStreamingToolCalls, parseResponseToolCalls, parseToolCalls } from '../source/tools/parse.js'
 
 const test = ava as unknown as TestFn
+const fence = '```'
+const callBlock = (name: string, input: unknown) => `${fence}tool_call\nname: ${name}\ninput: ${JSON.stringify(input)}\n${fence}`
+const reportedToolCall = callBlock('read_file', { path: 'test/fixtures/lines.txt', offset: 2, limit: 2 })
 
-const reportedToolCall = `<tool_calls>
-<invoke name="read_file">
-  <parameter name="path">test/fixtures/lines.txt</parameter>
-  <parameter name="offset">2</parameter>
-  <parameter name="limit">2</parameter>
-</invoke>
-</tool_calls>`
-
-test('parses and executes a ranged read_file call from streamed XML', async (t) => {
+test('parses and executes a ranged read_file call with JSON numeric arguments', async (t) => {
 	const [call] = parseToolCalls(reportedToolCall)
 	t.truthy(call)
 	if (!call) return
-
-	const result = await executeTool(call)
-	t.deepEqual(result, {
-		ok: true,
-		tool_name: 'read_file',
-		result: 'second\nthird',
-	})
+	t.deepEqual(await executeTool(call), { ok: true, tool_name: 'read_file', result: 'second\nthird' })
 })
 
-test('falls back to a tool call emitted in thinking content', (t) => {
-	const parsed = parseResponseToolCalls('', reportedToolCall)
-
-	t.is(parsed.sourceContent, reportedToolCall)
-	t.deepEqual(parsed.calls, [
-		{
-			name: 'read_file',
-			arguments: {
-				path: 'test/fixtures/lines.txt',
-				offset: '2',
-				limit: '2',
-			},
-		},
+test('falls back to thinking content and prefers response calls', (t) => {
+	t.is(parseResponseToolCalls('', reportedToolCall).sourceContent, reportedToolCall)
+	t.deepEqual(parseResponseToolCalls(reportedToolCall, callBlock('list_directory', {})).calls, [
+		{ name: 'read_file', arguments: { path: 'test/fixtures/lines.txt', offset: 2, limit: 2 } },
 	])
 })
 
-test('parses search and edit calls from the same streamed batch', (t) => {
-	const calls = parseToolCalls(`<tool_calls>
-<invoke name="search_files">
-  <parameter name="path">source</parameter>
-  <parameter name="query">parseToolCalls</parameter>
-</invoke>
-<invoke name="edit_file">
-  <parameter name="path">source/example.ts</parameter>
-  <parameter name="old_text">before</parameter>
-  <parameter name="new_text">after</parameter>
-</invoke>
-</tool_calls>`)
-
-	t.deepEqual(
-		calls.map((call) => call.name),
-		['search_files', 'edit_file']
-	)
+test('preserves file content including fences, XML, quotes and backslashes', (t) => {
+	const input = { path: 'example.md', content: 'First\n```\n<tool_calls>"quoted"</tool_calls>\nC:\\test\n' }
+	t.deepEqual(parseToolCalls(callBlock('write_file', input)), [{ name: 'write_file', arguments: input }])
 })
 
-test('hides partial tool markup while reasoning content streams', (t) => {
-	t.is(hideStreamingToolCalls('Checking the file.\n<tool_ca'), 'Checking the file.\n')
-	t.is(hideStreamingToolCalls(`Checking the file.\n${reportedToolCall}`), 'Checking the file.\n')
+test('accepts empty objects, CRLF and pretty JSON', (t) => {
+	t.deepEqual(parseToolCalls(callBlock('list_directory', {})), [{ name: 'list_directory', arguments: {} }])
+	t.deepEqual(parseToolCalls('```tool_call\r\nname: read_file\r\ninput: {\r\n "path": "test.txt"\r\n}\r\n```'), [
+		{ name: 'read_file', arguments: { path: 'test.txt' } },
+	])
+})
+
+test('accepts surrounding prose and multiple calls', (t) => {
+	const expected = parseToolCalls(reportedToolCall)
+	t.deepEqual(parseToolCalls('Checking.\n' + reportedToolCall + '\nContinuing.'), expected)
+	t.deepEqual(parseToolCalls(reportedToolCall + '\n' + reportedToolCall), [...expected, ...expected])
+})
+
+test('rejects malformed calls and non-object inputs', (t) => {
+	for (const input of [null, [], 'text', 42]) t.throws(() => parseToolCalls(callBlock('read_file', input)))
+	for (const content of [
+		'```tool_call\nname: read_file\ninput: {bad}\n```',
+		'```tool_call\ninput: {}\n```',
+		'```tool_call\nname: read_file\ninput: {}',
+	])
+		t.throws(() => parseToolCalls(content))
+	t.deepEqual(parseToolCalls('Ordinary response'), [])
+})
+
+test('hides every partial streamed tool block without hiding ordinary code', (t) => {
+	for (let length = 1; length <= reportedToolCall.length; length++) {
+		t.is(hideStreamingToolCalls(`Checking.\n${reportedToolCall.slice(0, length)}`), 'Checking.\n')
+	}
+	t.is(hideStreamingToolCalls('```ts\nconst value = 1\n```\n'), '```ts\nconst value = 1\n```\n')
+	t.is(hideStreamingToolCalls(`${reportedToolCall}\nDone`), '\nDone')
+})
+
+test('replaces each tool block with its own activity', (t) => {
+	const content = reportedToolCall + '\n' + callBlock('list_directory', {})
+	const display = formatToolActivityMessage(content, [
+		...parseToolCalls(reportedToolCall),
+		...parseToolCalls(callBlock('list_directory', {})),
+	])
+	t.is(display, '⚙  Reading test/fixtures/lines.txt...\n⚙  Listing the current directory...')
 })

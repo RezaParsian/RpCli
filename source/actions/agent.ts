@@ -21,7 +21,6 @@ export type AIResponseOptions = {
 	searchEnabled?: boolean
 	mode?: ChatMode
 	toolsEnabled?: boolean
-	modelType?: 'default' | 'expert'
 }
 
 export function getChatSystemPrompt(): string {
@@ -31,8 +30,7 @@ export function getChatSystemPrompt(): string {
 function formatResultsMessage(results: ToolResult[]): string {
 	const blocks = results
 		.map((result) => {
-			const body = result.ok ? result.result ?? '' : `Error: ${result.error}`
-			return `<tool_result name="${result.tool_name}" ok="${result.ok}">\n${body}\n</tool_result>`
+			return '```tool_result\n' + JSON.stringify(result) + '\n```'
 		})
 		.join('\n')
 
@@ -66,7 +64,6 @@ export async function getAIResponse({
 	searchEnabled = false,
 	mode = 'normal',
 	toolsEnabled = true,
-	modelType = 'default',
 }: AIResponseOptions): Promise<ChatResult> {
 	const signal = beginGeneration()
 
@@ -76,7 +73,6 @@ export async function getAIResponse({
 			prompt: nextPrompt,
 			thinkingEnabled,
 			searchEnabled,
-			modelType,
 			onChunk,
 		})
 

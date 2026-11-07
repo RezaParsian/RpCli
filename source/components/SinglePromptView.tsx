@@ -1,3 +1,4 @@
+import { attachFileMentions } from '../core/fileMentions.js'
 import React, { useCallback, useEffect, useState } from 'react'
 import { Box, Text, useApp } from 'ink'
 import Spinner from './Spinner.js'
@@ -44,7 +45,7 @@ export default function SinglePromptView({ prompt, thinking, quiet, search, toke
 
 				const fullResponse = await getAIResponse({
 					token,
-					prompt,
+					prompt: await attachFileMentions(prompt),
 					confirmTool,
 					onToolMessage: handleToolMessage,
 					thinkingEnabled: thinking,
