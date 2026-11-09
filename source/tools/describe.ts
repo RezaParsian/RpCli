@@ -2,6 +2,7 @@ import { promises as fs } from 'node:fs'
 import { stringArgument, textArgument } from './arguments.js'
 import { formatDiff } from './diff.js'
 import { safePath } from './paths.js'
+import { toolCallPattern } from './parse.js'
 import { commandContainsSudo } from './sudo.js'
 import type { ToolCall, ToolConfirmationDetails } from './types.js'
 
@@ -121,12 +122,11 @@ export function describeToolActivity(call: ToolCall): string {
 	}
 }
 
-/**
- * Replaces the <tool_calls> block in the assistant's raw content with short
- * activity descriptions. Useful for rendering a live "doing X, then Y..."
- * status instead of showing the raw tags while a batch executes.
- */
+/** Replaces raw calls with activity descriptions while tools execute. */
 export function formatToolActivityMessage(assistantContent: string, calls: ToolCall[]): string {
-	const activity = calls.map((call) => `⚙  ${describeToolActivity(call)}`).join('\n')
-	return assistantContent.replace(/<tool_calls>[\s\S]*?<\/tool_calls>/g, activity)
+	let index = 0
+	return assistantContent.replace(toolCallPattern, () => {
+		const call = calls[index++]
+		return call ? `⚙  ${describeToolActivity(call)}` : ''
+	})
 }

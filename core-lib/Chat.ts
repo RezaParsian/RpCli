@@ -169,6 +169,20 @@ export default async function chat({
 		if (content) onChunk?.({ type, content, messageId: result.messageId ?? null })
 	}
 
+	const replaceFragments = (snapshot: Array<{ type?: string; content?: string }>) => {
+		usingFragments = true
+		const previous = fragments.splice(0)
+		for (const [index, fragment] of snapshot.entries()) {
+			const type = fragment.type ?? 'RESPONSE'
+			const content = fragment.content ?? ''
+			const oldContent = previous[index]?.type === type ? previous[index]!.content : ''
+			fragments.push({ type, content })
+			const added = content.startsWith(oldContent) ? content.slice(oldContent.length) : content
+			emitChunk(type === 'THINK' ? 'thinking' : 'response', added)
+		}
+		activeFragmentIndex = fragments.length > 0 ? fragments.length - 1 : null
+	}
+
 	let continuationCount = 0
 
 	while (true) {
@@ -222,20 +236,8 @@ export default async function chat({
 					result.insertedAt = r.inserted_at
 					result.tokenUsage = r.accumulated_token_usage
 
-					if (Array.isArray(r.fragments) && r.fragments.length) {
-						usingFragments = true
-						if (fragments.length === 0) {
-							for (const f of r.fragments) {
-								const type = f?.type ?? 'RESPONSE'
-								const content = f?.content ?? ''
-								fragments.push({
-									type,
-									content,
-								})
-								emitChunk(type === 'THINK' ? 'thinking' : 'response', content)
-							}
-							activeFragmentIndex = fragments.length - 1
-						}
+					if (Array.isArray(r.fragments)) {
+						replaceFragments(r.fragments)
 					} else {
 						if (typeof r.content === 'string') {
 							flatContent += r.content
@@ -265,6 +267,11 @@ export default async function chat({
 					continue
 				}
 
+				if (activePatchPath === 'response/fragments' && Array.isArray(parsed.v) && parsed.o !== 'APPEND') {
+					replaceFragments(parsed.v)
+					continue
+				}
+
 				if (parsed.o === 'APPEND' && activePatchPath === 'response/fragments' && Array.isArray(parsed.v)) {
 					usingFragments = true
 					for (const f of parsed.v) {
@@ -280,13 +287,15 @@ export default async function chat({
 					continue
 				}
 
-				if (usingFragments && typeof parsed.v === 'string' && activePatchPath.includes('fragments')) {
-					if (activeFragmentIndex !== null) {
-						fragments[activeFragmentIndex]!.content += parsed.v
-						emitChunk(fragments[activeFragmentIndex]!.type === 'THINK' ? 'thinking' : 'response', parsed.v)
-					} else {
-						flatContent += parsed.v
-						emitChunk('response', parsed.v)
+				const fragmentContentPath = /^response\/fragments\/(-1|\d+)\/content$/.exec(activePatchPath)
+				if (usingFragments && typeof parsed.v === 'string' && fragmentContentPath) {
+					const index = Number(fragmentContentPath[1])
+					const fragment = fragments[index === -1 ? activeFragmentIndex ?? -1 : index]
+					if (fragment) {
+						const content = parsed.o === 'SET' ? parsed.v : fragment.content + parsed.v
+						const added = content.startsWith(fragment.content) ? content.slice(fragment.content.length) : content
+						fragment.content = content
+						emitChunk(fragment.type === 'THINK' ? 'thinking' : 'response', added)
 					}
 					continue
 				}

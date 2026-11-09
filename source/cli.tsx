@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import meow from 'meow'
 import dotenv from 'dotenv'
+import { checkForUpdate } from './core/checkForUpdate.js'
 import { tokenConfigPath } from './core/TokenConfig.js'
 
 dotenv.config({
@@ -60,6 +61,13 @@ const cli = meow(
 
 const firstArg = cli.input[0]
 
+let updateMessage: string | undefined
+
+// Pass the result into Ink so it remains visible during rendering.
+if (firstArg !== 'serve' && !('NO_UPDATE_NOTIFIER' in process.env) && cli.pkg.name && cli.pkg.version) {
+	updateMessage = await checkForUpdate(cli.pkg.name, cli.pkg.version)
+}
+
 if (firstArg === 'serve') {
 	// Start HTTP server
 	const { startServer } = await import('./server/index.js')
@@ -93,6 +101,7 @@ if (firstArg === 'serve') {
 			quiet: cli.flags.quiet ?? false,
 			search: cli.flags.search ?? false,
 			version: cli.pkg.version,
+			updateMessage,
 		}),
 		{
 			exitOnCtrlC: false,
